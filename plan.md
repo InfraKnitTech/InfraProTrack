@@ -319,4 +319,9 @@ Current follow-up:
 - Wired the frontend Settings page to show real app/domain rules and create/delete them without dummy data.
 - Verified backend route registration and frontend production build after the rules integration.
 
+Next follow-up:
+- Added `custom_groups` and `custom_group_members` tables through SQLAlchemy startup table creation.
+- Added live backend group APIs for options, list, create, and delete with reusable membership across users, manager teams, project teams, and departments.
+- Added a live dashboard Group tab to create custom categories, assign hierarchy, and view group-wise productivity rollups.
+
 

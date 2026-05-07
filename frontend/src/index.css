@@ -205,6 +205,12 @@ select.input-field {
   background: var(--primary-strong);
 }
 
+.btn-secondary {
+  background: var(--surface-alt);
+  color: var(--text-primary);
+  border: 1px solid var(--surface-border);
+}
+
 .animate-fade-in {
   animation: fadeIn 0.25s ease-out;
 }
@@ -706,6 +712,133 @@ td {
   gap: 1rem;
 }
 
+.group-builder,
+.group-cards {
+  display: grid;
+  gap: 1rem;
+}
+
+.group-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.group-form-grid,
+.group-member-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.group-form-wide {
+  grid-column: span 2;
+}
+
+.group-form label,
+.group-member-grid label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.group-form label span,
+.group-member-grid label span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.group-member-stack {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.group-member-row,
+.group-card {
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+  padding: 0.9rem;
+}
+
+.group-member-actions,
+.group-card-head,
+.group-chip-row,
+.group-builder-actions,
+.group-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.group-member-actions,
+.group-card-head,
+.group-builder-actions {
+  justify-content: space-between;
+}
+
+.group-member-actions span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.group-builder-actions {
+  justify-content: flex-end;
+}
+
+.group-builder-actions .btn {
+  gap: 0.45rem;
+}
+
+.group-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.group-card-head strong {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.group-card-head small {
+  color: var(--text-secondary);
+}
+
+.group-card p {
+  margin: 0.75rem 0;
+  font-size: 0.88rem;
+}
+
+.group-tree {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.group-tree-node {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.group-tree-row {
+  min-height: 38px;
+  border: 1px solid var(--surface-border);
+  border-radius: 7px;
+  background: var(--surface);
+  padding: 0 0.75rem;
+}
+
+.group-tree-row strong {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.group-tree-row small {
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+.group-tree-row .status-pill {
+  margin-left: auto;
+}
+
 .rule-form {
   display: grid;
   gap: 0.9rem;
@@ -840,8 +973,15 @@ td {
   .page-grid,
   .formula-grid,
   .report-grid,
-  .rule-form-grid {
+  .rule-form-grid,
+  .group-form-grid,
+  .group-member-grid,
+  .group-cards {
     grid-template-columns: 1fr;
+  }
+
+  .group-form-wide {
+    grid-column: span 1;
   }
 }
 

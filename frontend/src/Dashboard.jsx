@@ -25,6 +25,7 @@ import {
   Clock,
   Download,
   FileSpreadsheet,
+  FolderTree,
   LayoutDashboard,
   LogOut,
   Moon,
@@ -54,6 +55,24 @@ function scoreTone(score) {
   return 'risk';
 }
 
+function createGroupMemberDraft(index = 0) {
+  return {
+    client_key: `member-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${index}`,
+    parent_client_key: '',
+    member_type: 'user',
+    ref_id: '',
+    department_name: '',
+    label_override: '',
+  };
+}
+
+function memberOptions(groupOptions, memberType) {
+  if (memberType === 'manager') return groupOptions.managers || [];
+  if (memberType === 'project') return groupOptions.projects || [];
+  if (memberType === 'department') return groupOptions.departments || [];
+  return groupOptions.users || [];
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
@@ -74,6 +93,15 @@ export default function Dashboard() {
   const [employeeSummary, setEmployeeSummary] = useState([]);
   const [shiftSummary, setShiftSummary] = useState([]);
   const [projectSummary, setProjectSummary] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [groupOptions, setGroupOptions] = useState({ users: [], managers: [], projects: [], departments: [] });
+  const [groupForm, setGroupForm] = useState({
+    name: '',
+    category_name: '',
+    description: '',
+    members: [createGroupMemberDraft()],
+  });
   const [rules, setRules] = useState([]);
   const [rulesLoading, setRulesLoading] = useState(false);
   const [ruleForm, setRuleForm] = useState({
@@ -144,6 +172,25 @@ export default function Dashboard() {
     }
   };
 
+  const fetchGroups = async () => {
+    try {
+      setGroupsLoading(true);
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const [groupsRes, optionsRes] = await Promise.all([
+        axios.get(`${API_BASE}/api/groups`, { headers }),
+        axios.get(`${API_BASE}/api/groups/options`, { headers }),
+      ]);
+      setGroups(groupsRes.data.items || []);
+      setGroupOptions(optionsRes.data || { users: [], managers: [], projects: [], departments: [] });
+    } catch (err) {
+      console.error('Failed to fetch groups', err);
+      setGroups([]);
+    } finally {
+      setGroupsLoading(false);
+    }
+  };
+
   const fetchPendingAgents = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -164,6 +211,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchRules();
+  }, []);
+
+  useEffect(() => {
+    fetchGroups();
   }, []);
 
   const decideAgent = async (requestId, action) => {
@@ -227,8 +278,102 @@ export default function Dashboard() {
     }
   };
 
+  const handleGroupFormChange = (event) => {
+    const { name, value } = event.target;
+    setGroupForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleGroupMemberChange = (clientKey, field, value) => {
+    setGroupForm((current) => ({
+      ...current,
+      members: current.members.map((member) => {
+        if (member.client_key !== clientKey) {
+          return member;
+        }
+        if (field === 'member_type') {
+          return {
+            ...member,
+            member_type: value,
+            ref_id: '',
+            department_name: '',
+            parent_client_key: member.parent_client_key,
+          };
+        }
+        return { ...member, [field]: value };
+      }),
+    }));
+  };
+
+  const addGroupMember = () => {
+    setGroupForm((current) => ({
+      ...current,
+      members: [...current.members, createGroupMemberDraft(current.members.length)],
+    }));
+  };
+
+  const removeGroupMember = (clientKey) => {
+    setGroupForm((current) => {
+      const members = current.members.filter((member) => member.client_key !== clientKey);
+      return {
+        ...current,
+        members: members.map((member) => (
+          member.parent_client_key === clientKey
+            ? { ...member, parent_client_key: '' }
+            : member
+        )),
+      };
+    });
+  };
+
+  const createGroup = async (event) => {
+    event.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const payload = {
+        name: groupForm.name,
+        category_name: groupForm.category_name,
+        description: groupForm.description,
+        members: groupForm.members.map((member, index) => ({
+          client_key: member.client_key,
+          parent_client_key: member.parent_client_key || null,
+          member_type: member.member_type,
+          user_id: member.member_type === 'user' ? Number(member.ref_id) : null,
+          manager_user_id: member.member_type === 'manager' ? Number(member.ref_id) : null,
+          project_id: member.member_type === 'project' ? Number(member.ref_id) : null,
+          department_name: member.member_type === 'department' ? member.department_name : null,
+          label_override: member.label_override || null,
+          sort_order: index,
+        })),
+      };
+      await axios.post(`${API_BASE}/api/groups`, payload, { headers });
+      setGroupForm({
+        name: '',
+        category_name: '',
+        description: '',
+        members: [createGroupMemberDraft()],
+      });
+      fetchGroups();
+    } catch (err) {
+      console.error('Failed to create group', err);
+    }
+  };
+
+  const deleteGroup = async (groupId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API_BASE}/api/groups/${groupId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      fetchGroups();
+    } catch (err) {
+      console.error('Failed to delete group', err);
+    }
+  };
+
   const nav = [
     ['overview', LayoutDashboard, 'Overview'],
+    ['groups', FolderTree, 'Groups'],
     ['managers', Users, 'Managers'],
     ['employees', Activity, 'Employees'],
     ['analytics', BarChart3, 'Analytics'],
@@ -462,6 +607,146 @@ export default function Dashboard() {
           </section>
         )}
 
+        {activeTab === 'groups' && (
+          <section className="page-grid">
+            <div className="panel full">
+              <PanelHeader icon={FolderTree} title="Custom Group Builder" action="Reusable categories" />
+              <div className="group-builder">
+                <form className="group-form" onSubmit={createGroup}>
+                  <div className="group-form-grid">
+                    <label>
+                      <span>Group name</span>
+                      <input className="input-field" name="name" value={groupForm.name} onChange={handleGroupFormChange} placeholder="North Delivery Cluster" required />
+                    </label>
+                    <label>
+                      <span>Category</span>
+                      <input className="input-field" name="category_name" value={groupForm.category_name} onChange={handleGroupFormChange} placeholder="Department, Category, Special Review" required />
+                    </label>
+                    <label className="group-form-wide">
+                      <span>Description</span>
+                      <input className="input-field" name="description" value={groupForm.description} onChange={handleGroupFormChange} placeholder="Optional note about why this group exists" />
+                    </label>
+                  </div>
+
+                  <div className="group-member-stack">
+                    {groupForm.members.map((member, index) => (
+                      <div className="group-member-row" key={member.client_key}>
+                        <div className="group-member-grid">
+                          <label>
+                            <span>Type</span>
+                            <select className="input-field" value={member.member_type} onChange={(event) => handleGroupMemberChange(member.client_key, 'member_type', event.target.value)}>
+                              <option value="user">User</option>
+                              <option value="manager">Manager team</option>
+                              <option value="project">Project team</option>
+                              <option value="department">Department</option>
+                            </select>
+                          </label>
+                          <label>
+                            <span>Target</span>
+                            <select
+                              className="input-field"
+                              value={member.member_type === 'department' ? member.department_name : member.ref_id}
+                              onChange={(event) => handleGroupMemberChange(
+                                member.client_key,
+                                member.member_type === 'department' ? 'department_name' : 'ref_id',
+                                event.target.value,
+                              )}
+                            >
+                              <option value="">Select</option>
+                              {memberOptions(groupOptions, member.member_type).map((option) => (
+                                <option key={option.id} value={option.department_name || option.ref_id}>{option.label}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <span>Parent</span>
+                            <select className="input-field" value={member.parent_client_key} onChange={(event) => handleGroupMemberChange(member.client_key, 'parent_client_key', event.target.value)}>
+                              <option value="">Root node</option>
+                              {groupForm.members
+                                .filter((candidate) => candidate.client_key !== member.client_key)
+                                .map((candidate, candidateIndex) => (
+                                  <option key={candidate.client_key} value={candidate.client_key}>
+                                    {candidate.label_override || `${candidate.member_type} ${candidateIndex + 1}`}
+                                  </option>
+                                ))}
+                            </select>
+                          </label>
+                          <label>
+                            <span>Custom label</span>
+                            <input className="input-field" value={member.label_override} onChange={(event) => handleGroupMemberChange(member.client_key, 'label_override', event.target.value)} placeholder="Optional display label" />
+                          </label>
+                        </div>
+                        <div className="group-member-actions">
+                          <span>Node {index + 1}</span>
+                          <button type="button" className="table-action danger" onClick={() => removeGroupMember(member.client_key)} aria-label={`Remove member ${index + 1}`}>
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="group-builder-actions">
+                    <button type="button" className="btn btn-secondary" onClick={addGroupMember}>
+                      <Plus size={16} />
+                      Add member
+                    </button>
+                    <button type="submit" className="btn btn-primary">
+                      <Plus size={16} />
+                      Create group
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <div className="panel full">
+              <PanelHeader icon={BarChart3} title="Group Rollups" action="Live group-wise data" />
+              <DataTable
+                columns={['Category', 'Group', 'Employees', 'Productive', 'Active', 'Idle', 'Productivity %', 'Members', 'Action']}
+                rows={groups.map((group) => [
+                  group.category_name,
+                  group.name,
+                  group.summary.employee_count,
+                  secondsToHours(group.summary.productive_seconds),
+                  secondsToHours(group.summary.active_seconds),
+                  secondsToHours(group.summary.idle_seconds),
+                  <span className={`score ${scoreTone(Math.round(group.summary.productivity_percent))}`}>{Math.round(group.summary.productivity_percent)}</span>,
+                  group.members.length,
+                  <button className="table-action danger" onClick={() => deleteGroup(group.id)} aria-label={`Delete group ${group.name}`}>
+                    <Trash2 size={15} />
+                  </button>,
+                ])}
+                emptyMessage={groupsLoading ? 'Loading live group data...' : 'No custom groups created yet.'}
+              />
+            </div>
+
+            <div className="panel full">
+              <PanelHeader icon={Users} title="Group Hierarchies" action="Users can repeat across groups" />
+              {groups.length ? (
+                <div className="group-cards">
+                  {groups.map((group) => (
+                    <div className="group-card" key={group.id}>
+                      <div className="group-card-head">
+                        <div>
+                          <strong>{group.name}</strong>
+                          <small>{group.category_name}</small>
+                        </div>
+                        <div className="group-chip-row">
+                          <span className="status-pill">{group.summary.employee_count} employees</span>
+                          <span className={`score ${scoreTone(Math.round(group.summary.productivity_percent))}`}>{Math.round(group.summary.productivity_percent)}%</span>
+                        </div>
+                      </div>
+                      {group.description && <p>{group.description}</p>}
+                      <GroupHierarchy members={group.members} />
+                    </div>
+                  ))}
+                </div>
+              ) : <EmptyState message="No live custom group hierarchy exists yet." />}
+            </div>
+          </section>
+        )}
+
         {activeTab === 'employees' && (
           <section className="page-grid">
             <div className="panel full">
@@ -671,4 +956,33 @@ function LegendList({ rows }) {
 
 function EmptyState({ message }) {
   return <div className="empty-state">{message}</div>;
+}
+
+function GroupHierarchy({ members }) {
+  const tree = useMemo(() => {
+    const byParent = new Map();
+    members.forEach((member) => {
+      const parentKey = member.parent_member_id || 0;
+      const bucket = byParent.get(parentKey) || [];
+      bucket.push(member);
+      byParent.set(parentKey, bucket);
+    });
+    return byParent;
+  }, [members]);
+
+  const renderBranch = (parentId = 0, depth = 0) => {
+    const branch = tree.get(parentId) || [];
+    return branch.map((member) => (
+      <div className="group-tree-node" key={member.id} style={{ marginLeft: `${depth * 18}px` }}>
+        <div className="group-tree-row">
+          <strong>{member.display_label}</strong>
+          <small>{member.member_type}</small>
+          <span className="status-pill">{member.employee_count} people</span>
+        </div>
+        {renderBranch(member.id, depth + 1)}
+      </div>
+    ));
+  };
+
+  return <div className="group-tree">{renderBranch()}</div>;
 }

@@ -10,7 +10,7 @@ import uvicorn
 
 from core.config import server
 from database import create_all_tables
-from routers import agents, analytics, auth, dashboard, reports, rules, telemetry
+from routers import agents, analytics, auth, dashboard, groups, reports, rules, telemetry
 
 
 @asynccontextmanager
@@ -56,6 +56,7 @@ app.include_router(agents.router)
 app.include_router(analytics.router)
 app.include_router(reports.router)
 app.include_router(rules.router)
+app.include_router(groups.router)
 
 
 @app.get("/", tags=["Health"])
