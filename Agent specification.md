@@ -31,8 +31,8 @@
 | 29 | Graphical analytics for Top 10 Applications and Domains | **Partially done** | Frontend analytics consumes real backend `top-apps` and `top-domains` APIs. Top-app visuals are live; top-domain visuals remain limited until URL capture is added to the Windows agent path. |
 | 30 | Human authentication | **Done** | Done. Admin login uses username `admin` and password `pass123`; OTP was removed by product decision. |
 | 31 | Email-based OTP / Two-factor authentication | **Deferred by product decision** | Requirement says OTP, but user requested removal. Keep deferred unless product decision changes. |
-| 32 | Frontend real dashboard data integration | **Partially done** | Overview already used live dashboard data; analytics tab now also uses live backend analytics APIs. Managers, employees, reports, and settings still contain static placeholders. |
-| 33 | Frontend static screens / basic auth / pending-agent notifications | **Partially done** | Static production-style UI, login, theme, logo, collapsible sidebar, user menu, and pending-agent approval are implemented. |
+| 32 | Frontend real dashboard data integration | **Partially done** | Dummy dashboard entries were removed. Overview, analytics, and summary tables now show live backend data only; unsupported sections now render explicit empty states until APIs are added. |
+| 33 | Frontend static screens / basic auth / pending-agent notifications | **Partially done** | Static production-style UI, login, theme, logo, collapsible sidebar, user menu, and pending-agent approval are implemented. Fake sample data has been removed from the dashboard surfaces. |
 | 34 | Role-based access: Admin, Manager, Employee views | **Missing - crucial** | User model has roles, but route guards and API role policies need expansion. |
 | 35 | Employee-to-manager/project/shift mapping | **Missing - crucial** | Seed data exists; admin CRUD and enforcement are pending. |
 | 36 | Privacy, consent, policy controls for screenshots, file tracking, webcam/liveness | **Missing - crucial** | Needs organization policy settings and frontend controls before invasive features. |

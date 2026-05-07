@@ -63,9 +63,11 @@ def utc_iso() -> str:
 
 def load_config() -> dict[str, Any]:
     config = DEFAULT_CONFIG.copy()
+    template_config: dict[str, Any] = {}
     if CONFIG_TEMPLATE_PATH.exists():
         with CONFIG_TEMPLATE_PATH.open("r", encoding="utf-8") as f:
-            config.update(json.load(f))
+            template_config = json.load(f)
+            config.update(template_config)
     config_exists = CONFIG_PATH.exists()
     if CONFIG_PATH.exists():
         with CONFIG_PATH.open("r", encoding="utf-8") as f:
@@ -92,6 +94,15 @@ def load_config() -> dict[str, Any]:
     if not config.get("device_id"):
         config["device_id"] = build_device_id(config["hostname"])
         changed = True
+
+    # Keep connection/auth bootstrap values aligned with the checked-in template,
+    # while leaving runtime-issued credentials stored in ProgramData intact.
+    for field in ("server_url", "master_password"):
+        template_value = template_config.get(field)
+        if template_value and config.get(field) != template_value:
+            config[field] = template_value
+            changed = True
+
     if changed:
         save_config(config)
     return config
@@ -99,8 +110,14 @@ def load_config() -> dict[str, Any]:
 
 def save_config(config: dict[str, Any]) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    with CONFIG_PATH.open("w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2)
+    try:
+        with CONFIG_PATH.open("w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+    except PermissionError:
+        print(
+            f"Warning: could not persist runtime config to {CONFIG_PATH}; using in-memory values for this run.",
+            file=sys.stderr,
+        )
 
 
 def agent_data_path(path_value: str) -> Path:
@@ -547,12 +564,16 @@ class ProductivityAgent:
 def run_foreground() -> None:
     config = load_config()
     logger = setup_logging(config)
+    logger.info("Using config: %s", CONFIG_PATH)
+    logger.info("Using server URL: %s", config["server_url"])
     ProductivityAgent(config, logger).run()
 
 
 def register_once() -> None:
     config = load_config()
     logger = setup_logging(config)
+    logger.info("Using config: %s", CONFIG_PATH)
+    logger.info("Using server URL: %s", config["server_url"])
     config["agent_id"] = None
     config["agent_token_id"] = ""
     config["agent_token"] = ""
@@ -569,6 +590,8 @@ def register_once() -> None:
 def heartbeat_once() -> None:
     config = load_config()
     logger = setup_logging(config)
+    logger.info("Using config: %s", CONFIG_PATH)
+    logger.info("Using server URL: %s", config["server_url"])
     client = AgentClient(config, logger)
     if not client.ensure_registered():
         print(f"Agent pending approval: {config.get('pending_request_id')}")
@@ -580,6 +603,8 @@ def heartbeat_once() -> None:
 def collect_once() -> None:
     config = load_config()
     logger = setup_logging(config)
+    logger.info("Using config: %s", CONFIG_PATH)
+    logger.info("Using server URL: %s", config["server_url"])
     agent = ProductivityAgent(config, logger)
     agent.register_loop()
     agent.tick()

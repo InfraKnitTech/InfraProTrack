@@ -42,46 +42,6 @@ import axios from 'axios';
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5002';
 const COLORS = ['#2563eb', '#059669', '#f59e0b', '#dc2626', '#7c3aed', '#0891b2'];
 
-const employees = [
-  { name: 'Demo Employee', role: 'Analyst', manager: 'Operations Manager', shift: 'India Day', score: 86, active: '5h 42m', idle: '24m', status: 'Active' },
-  { name: 'Night Shift Employee', role: 'Support', manager: 'Operations Manager', shift: 'US Support', score: 78, active: '4h 58m', idle: '38m', status: 'In shift' },
-  { name: 'Priya Nair', role: 'QA', manager: 'Operations Manager', shift: 'India Day', score: 91, active: '6h 15m', idle: '15m', status: 'Active' },
-  { name: 'Rahul Mehta', role: 'Developer', manager: 'Operations Manager', shift: 'India Day', score: 73, active: '4h 22m', idle: '52m', status: 'Review' },
-];
-
-const managerRows = [
-  { manager: 'Operations Manager', project: 'Productivity Operations', team: 18, score: 84, productive: '112h', alerts: 3 },
-  { manager: 'Delivery Lead', project: 'Client Analytics', team: 14, score: 79, productive: '91h', alerts: 5 },
-  { manager: 'Support Lead', project: 'US Support', team: 11, score: 76, productive: '74h', alerts: 6 },
-];
-
-const shiftRows = [
-  { name: 'India Day Shift', window: '09:30 - 18:30', timezone: 'Asia/Kolkata', coverage: '78%', people: 31 },
-  { name: 'US Support Shift', window: '20:00 - 05:00', timezone: 'Asia/Kolkata', coverage: '64%', people: 12 },
-  { name: 'Flexible Overlap', window: '13:00 - 22:00', timezone: 'Asia/Kolkata', coverage: '58%', people: 8 },
-];
-
-const rules = [
-  { target: 'Visual Studio Code', scope: 'App', category: 'Productive', severity: 'Low' },
-  { target: 'Microsoft Excel', scope: 'App', category: 'Productive', severity: 'Low' },
-  { target: 'youtube.com', scope: 'Domain', category: 'Unproductive', severity: 'Medium' },
-  { target: 'Games', scope: 'App', category: 'Prohibited', severity: 'High' },
-];
-
-const alerts = [
-  { title: 'Prohibited app matched', employee: 'Rahul Mehta', time: '10:42', severity: 'High' },
-  { title: 'Idle reason pending', employee: 'Night Shift Employee', time: '09:18', severity: 'Medium' },
-  { title: 'Low productivity screenshot', employee: 'Demo Employee', time: '08:55', severity: 'Medium' },
-];
-
-const fallbackTrend = [
-  { name: 'Mon', productive: 6.4, unproductive: 1.1 },
-  { name: 'Tue', productive: 7.1, unproductive: 0.8 },
-  { name: 'Wed', productive: 5.9, unproductive: 1.4 },
-  { name: 'Thu', productive: 6.8, unproductive: 0.9 },
-  { name: 'Fri', productive: 7.4, unproductive: 0.7 },
-];
-
 function secondsToHours(seconds) {
   return `${(seconds / 3600).toFixed(1)}h`;
 }
@@ -105,9 +65,13 @@ export default function Dashboard() {
     active_employees: 0,
     total_employees: 0,
   });
-  const [productivityData, setProductivityData] = useState(fallbackTrend);
+  const [productivityData, setProductivityData] = useState([]);
   const [appUsageData, setAppUsageData] = useState([]);
   const [topDomains, setTopDomains] = useState([]);
+  const [managerSummary, setManagerSummary] = useState([]);
+  const [employeeSummary, setEmployeeSummary] = useState([]);
+  const [shiftSummary, setShiftSummary] = useState([]);
+  const [projectSummary, setProjectSummary] = useState([]);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [pendingAgents, setPendingAgents] = useState([]);
 
@@ -129,15 +93,23 @@ export default function Dashboard() {
       try {
         const token = localStorage.getItem('token');
         const headers = { Authorization: `Bearer ${token}` };
-        const [dashboardRes, appsRes, domainsRes] = await Promise.all([
+        const [dashboardRes, appsRes, domainsRes, managerRes, employeeRes, shiftRes, projectRes] = await Promise.all([
           axios.get(`${API_BASE}/api/dashboard/admin`, { headers }),
           axios.get(`${API_BASE}/api/analytics/top-apps`, { headers }),
           axios.get(`${API_BASE}/api/analytics/top-domains`, { headers }),
+          axios.get(`${API_BASE}/api/reports/productivity-summary`, { headers, params: { group_by: 'manager' } }),
+          axios.get(`${API_BASE}/api/reports/productivity-summary`, { headers, params: { group_by: 'employee' } }),
+          axios.get(`${API_BASE}/api/reports/productivity-summary`, { headers, params: { group_by: 'shift' } }),
+          axios.get(`${API_BASE}/api/reports/productivity-summary`, { headers, params: { group_by: 'project' } }),
         ]);
         setMetrics(dashboardRes.data.metrics);
-        setProductivityData(dashboardRes.data.productivity_data?.length ? dashboardRes.data.productivity_data : fallbackTrend);
+        setProductivityData(dashboardRes.data.productivity_data || []);
         setAppUsageData(appsRes.data.items || []);
         setTopDomains(domainsRes.data.items || []);
+        setManagerSummary(managerRes.data.rows || []);
+        setEmployeeSummary(employeeRes.data.rows || []);
+        setShiftSummary(shiftRes.data.rows || []);
+        setProjectSummary(projectRes.data.rows || []);
       } catch (err) {
         console.error('Failed to fetch dashboard data', err);
       }
@@ -181,23 +153,8 @@ export default function Dashboard() {
     ((metrics.active_employees || 0) / Math.max(metrics.total_employees || 1, 1)) * 100
   );
 
-  const appChart = appUsageData.length && appUsageData[0].name !== 'No Data'
-    ? appUsageData
-    : [
-        { name: 'VS Code', value: 15400 },
-        { name: 'Excel', value: 11800 },
-        { name: 'Chrome', value: 9400 },
-        { name: 'Teams', value: 7200 },
-      ];
-
-  const domainChart = topDomains.length
-    ? topDomains
-    : [
-        { name: 'jira.company.com', value: 8200 },
-        { name: 'docs.google.com', value: 6300 },
-        { name: 'github.com', value: 5900 },
-        { name: 'youtube.com', value: 1800 },
-      ];
+  const appChart = appUsageData;
+  const domainChart = topDomains;
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -341,63 +298,59 @@ export default function Dashboard() {
 
             <div className="panel wide">
               <PanelHeader icon={BarChart3} title="Productivity Trend" action="Live" />
-              <div className="chart-lg">
-                <ResponsiveContainer>
-                  <BarChart data={productivityData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="productive" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="unproductive" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              {productivityData.length ? (
+                <div className="chart-lg">
+                  <ResponsiveContainer>
+                    <BarChart data={productivityData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="productive" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="unproductive" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : <EmptyState message="No live productivity trend data yet." />}
             </div>
 
             <div className="panel">
-              <PanelHeader icon={AlertTriangle} title="Priority Alerts" action={alerts.length} />
-              <div className="stack-list">
-                {alerts.map((alert) => (
-                  <div className="alert-row" key={`${alert.title}-${alert.employee}`}>
-                    <span className={`severity ${alert.severity.toLowerCase()}`}>{alert.severity}</span>
-                    <div>
-                      <strong>{alert.title}</strong>
-                      <small>{alert.employee} at {alert.time}</small>
-                    </div>
-                    <ChevronRight size={16} />
-                  </div>
-                ))}
-              </div>
+              <PanelHeader icon={AlertTriangle} title="Priority Alerts" action="Live only" />
+              <EmptyState message="No live alert feed connected yet." />
             </div>
 
             <div className="panel">
               <PanelHeader icon={Activity} title="Top Applications" action="Top 10" />
-              <div className="chart-md">
-                <ResponsiveContainer>
-                  <PieChart>
-                    <Pie data={appChart} dataKey="value" innerRadius={62} outerRadius={92} paddingAngle={3}>
-                      {appChart.map((entry, index) => <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip formatter={(value) => secondsToHours(value)} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <LegendList rows={appChart.slice(0, 4)} />
+              {appChart.length ? (
+                <>
+                  <div className="chart-md">
+                    <ResponsiveContainer>
+                      <PieChart>
+                        <Pie data={appChart} dataKey="value" innerRadius={62} outerRadius={92} paddingAngle={3}>
+                          {appChart.map((entry, index) => <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip formatter={(value) => secondsToHours(value)} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <LegendList rows={appChart.slice(0, 4)} />
+                </>
+              ) : <EmptyState message="No live application usage data yet." />}
             </div>
 
             <div className="panel wide">
-              <PanelHeader icon={Building2} title="Manager Performance" action="Drill down" />
+              <PanelHeader icon={Building2} title="Project Performance" action="Live summary" />
               <DataTable
-                columns={['Manager', 'Project', 'Team', 'Score', 'Productive', 'Alerts']}
-                rows={managerRows.map((row) => [
-                  row.manager,
-                  row.project,
-                  row.team,
-                  <span className={`score ${scoreTone(row.score)}`}>{row.score}</span>,
-                  row.productive,
-                  row.alerts,
+                columns={['Project', 'Employees', 'Productive', 'Active', 'Idle', 'Productivity %']}
+                rows={projectSummary.map((row) => [
+                  row.group_name,
+                  row.employee_count,
+                  secondsToHours(row.productive_seconds),
+                  secondsToHours(row.active_seconds),
+                  secondsToHours(row.idle_seconds),
+                  <span className={`score ${scoreTone(Math.round(row.productivity_percent))}`}>{Math.round(row.productivity_percent)}</span>,
                 ])}
+                emptyMessage="No live project summary data yet."
               />
             </div>
           </section>
@@ -408,40 +361,38 @@ export default function Dashboard() {
             <div className="panel full">
               <PanelHeader icon={Users} title="Manager to Project to Team" action="Hierarchy" />
               <DataTable
-                columns={['Manager', 'Project', 'Team Size', 'Productivity Index', 'Productive Time', 'Open Alerts']}
-                rows={managerRows.map((row) => [
-                  row.manager,
-                  row.project,
-                  row.team,
-                  <span className={`score ${scoreTone(row.score)}`}>{row.score}</span>,
-                  row.productive,
-                  row.alerts,
+                columns={['Manager', 'Employees', 'Productive', 'Active', 'Idle', 'Productivity %']}
+                rows={managerSummary.map((row) => [
+                  row.group_name,
+                  row.employee_count,
+                  secondsToHours(row.productive_seconds),
+                  secondsToHours(row.active_seconds),
+                  secondsToHours(row.idle_seconds),
+                  <span className={`score ${scoreTone(Math.round(row.productivity_percent))}`}>{Math.round(row.productivity_percent)}</span>,
                 ])}
+                emptyMessage="No live manager summary data yet."
               />
             </div>
             <div className="panel wide">
               <PanelHeader icon={BarChart3} title="Team Comparison" action="This week" />
-              <div className="chart-lg">
-                <ResponsiveContainer>
-                  <LineChart data={managerRows.map((row) => ({ name: row.manager.split(' ')[0], score: row.score, alerts: row.alerts }))}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line dataKey="score" stroke="#2563eb" strokeWidth={3} />
-                    <Line dataKey="alerts" stroke="#dc2626" strokeWidth={3} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+              {managerSummary.length ? (
+                <div className="chart-lg">
+                  <ResponsiveContainer>
+                    <LineChart data={managerSummary.map((row) => ({ name: row.group_name, score: Math.round(row.productivity_percent), employees: row.employee_count }))}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Line dataKey="score" stroke="#2563eb" strokeWidth={3} />
+                      <Line dataKey="employees" stroke="#dc2626" strokeWidth={3} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : <EmptyState message="No live manager comparison data yet." />}
             </div>
             <div className="panel">
               <PanelHeader icon={ShieldCheck} title="Manager Controls" action="Rules" />
-              <div className="control-list">
-                <button>Define productive apps</button>
-                <button>Define unproductive apps</button>
-                <button>Review prohibited alerts</button>
-                <button>Export team report</button>
-              </div>
+              <EmptyState message="No live manager control API connected yet." />
             </div>
           </section>
         )}
@@ -449,38 +400,39 @@ export default function Dashboard() {
         {activeTab === 'employees' && (
           <section className="page-grid">
             <div className="panel full">
-              <PanelHeader icon={Activity} title="Employee Activity" action={`${employees.length} employees`} />
+              <PanelHeader icon={Activity} title="Employee Activity" action="Live summary" />
               <DataTable
-                columns={['Employee', 'Role', 'Manager', 'Shift', 'Score', 'Active', 'Idle', 'Status']}
-                rows={employees.map((row) => [
-                  row.name,
-                  row.role,
-                  row.manager,
-                  row.shift,
-                  <span className={`score ${scoreTone(row.score)}`}>{row.score}</span>,
-                  row.active,
-                  row.idle,
-                  <span className="status-pill">{row.status}</span>,
+                columns={['Employee', 'Logins', 'Logouts', 'Productive', 'Active', 'Idle', 'Productivity %']}
+                rows={employeeSummary.map((row) => [
+                  row.group_name,
+                  row.login_count,
+                  row.logout_count,
+                  secondsToHours(row.productive_seconds),
+                  secondsToHours(row.active_seconds),
+                  secondsToHours(row.idle_seconds),
+                  <span className={`score ${scoreTone(Math.round(row.productivity_percent))}`}>{Math.round(row.productivity_percent)}</span>,
                 ])}
+                emptyMessage="No live employee summary data yet."
               />
             </div>
             <div className="panel wide">
               <PanelHeader icon={Clock} title="Shift Coverage" action="Timezone aware" />
               <DataTable
-                columns={['Shift', 'Window', 'Timezone', 'Coverage', 'People']}
-                rows={shiftRows.map((row) => [row.name, row.window, row.timezone, row.coverage, row.people])}
+                columns={['Shift', 'Employees', 'Productive', 'Active', 'Idle', 'Productivity %']}
+                rows={shiftSummary.map((row) => [
+                  row.group_name,
+                  row.employee_count,
+                  secondsToHours(row.productive_seconds),
+                  secondsToHours(row.active_seconds),
+                  secondsToHours(row.idle_seconds),
+                  <span className={`score ${scoreTone(Math.round(row.productivity_percent))}`}>{Math.round(row.productivity_percent)}</span>,
+                ])}
+                emptyMessage="No live shift summary data yet."
               />
             </div>
             <div className="panel">
               <PanelHeader icon={CalendarDays} title="Daily Timeline" action="Today" />
-              <div className="timeline">
-                {['Login', 'VS Code', 'Excel report', 'Idle reason', 'Teams sync'].map((item, index) => (
-                  <div key={item}>
-                    <span>{`${9 + index}:00`}</span>
-                    <strong>{item}</strong>
-                  </div>
-                ))}
-              </div>
+              <EmptyState message="No live per-employee timeline API connected yet." />
             </div>
           </section>
         )}
@@ -492,20 +444,16 @@ export default function Dashboard() {
               <DataTable
                 columns={['Application', 'Duration', 'Category']}
                 rows={appChart.map((row) => [row.name, secondsToHours(row.value), row.category || 'Neutral'])}
+                emptyMessage="No live application analytics yet."
               />
             </div>
             <div className="panel">
               <PanelHeader icon={Building2} title="Top Domains" action="Top 10" />
-              <LegendList rows={domainChart} />
+              {domainChart.length ? <LegendList rows={domainChart} /> : <EmptyState message="No live domain usage data yet." />}
             </div>
             <div className="panel full">
-              <PanelHeader icon={BarChart3} title="Productivity Index Model" action="Weighted" />
-              <div className="formula-grid">
-                <div><strong>60%</strong><span>Productive time ratio</span></div>
-                <div><strong>20%</strong><span>Idle penalty</span></div>
-                <div><strong>10%</strong><span>Unproductive usage</span></div>
-                <div><strong>10%</strong><span>Liveness and compliance</span></div>
-              </div>
+              <PanelHeader icon={BarChart3} title="Productivity Index Model" action="Pending" />
+              <EmptyState message="No live productivity scoring model is connected yet." />
             </div>
           </section>
         )}
@@ -514,16 +462,7 @@ export default function Dashboard() {
           <section className="page-grid">
             <div className="panel full">
               <PanelHeader icon={FileSpreadsheet} title="Excel Reports" action="Timezone compatible" />
-              <div className="report-grid">
-                {['Manager-wise Report', 'Employee-wise Report', 'Shift Summary', 'Prohibited Usage'].map((name) => (
-                  <button className="report-card" key={name}>
-                    <FileSpreadsheet size={22} />
-                    <strong>{name}</strong>
-                    <small>Last 7 days</small>
-                    <Download size={18} />
-                  </button>
-                ))}
-              </div>
+              <EmptyState message="No live report export API is connected yet." />
             </div>
           </section>
         )}
@@ -532,21 +471,20 @@ export default function Dashboard() {
           <section className="page-grid">
             <div className="panel wide">
               <PanelHeader icon={Settings} title="App and URL Rules" action="Project scoped" />
-              <DataTable
-                columns={['Target', 'Scope', 'Category', 'Severity']}
-                rows={rules.map((row) => [row.target, row.scope, row.category, <span className={`severity ${row.severity.toLowerCase()}`}>{row.severity}</span>])}
-              />
+              <EmptyState message="No live app rule management API is connected yet." />
             </div>
             <div className="panel">
               <PanelHeader icon={Clock} title="Shift Configuration" action="Overlap ready" />
-              <div className="stack-list compact">
-                {shiftRows.map((row) => (
-                  <div className="mini-row" key={row.name}>
-                    <strong>{row.name}</strong>
-                    <small>{row.window} - {row.timezone}</small>
-                  </div>
-                ))}
-              </div>
+              <DataTable
+                columns={['Shift', 'Employees', 'Productive', 'Idle']}
+                rows={shiftSummary.map((row) => [
+                  row.group_name,
+                  row.employee_count,
+                  secondsToHours(row.productive_seconds),
+                  secondsToHours(row.idle_seconds),
+                ])}
+                emptyMessage="No live shift configuration data yet."
+              />
             </div>
           </section>
         )}
@@ -568,7 +506,7 @@ function PanelHeader({ icon: Icon, title, action }) {
   );
 }
 
-function DataTable({ columns, rows }) {
+function DataTable({ columns, rows, emptyMessage = 'No live data available.' }) {
   return (
     <div className="table-wrap">
       <table>
@@ -576,11 +514,15 @@ function DataTable({ columns, rows }) {
           <tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr>
         </thead>
         <tbody>
-          {rows.map((row, rowIndex) => (
+          {rows.length ? rows.map((row, rowIndex) => (
             <tr key={rowIndex}>
               {row.map((cell, cellIndex) => <td key={`${rowIndex}-${cellIndex}`}>{cell}</td>)}
             </tr>
-          ))}
+          )) : (
+            <tr>
+              <td colSpan={columns.length} className="empty-cell">{emptyMessage}</td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
@@ -599,4 +541,8 @@ function LegendList({ rows }) {
       ))}
     </div>
   );
+}
+
+function EmptyState({ message }) {
+  return <div className="empty-state">{message}</div>;
 }

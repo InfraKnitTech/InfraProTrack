@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Lock, User } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:5002';
+
 export default function Login() {
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('pass123');
@@ -15,7 +17,7 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const res = await axios.post('http://localhost:5000/api/auth/login', {
+      const res = await axios.post(`${API_BASE}/api/auth/login`, {
         username,
         password,
       });
