@@ -310,4 +310,8 @@ Validated after analytics follow-up:
 - Backend exposes `/api/analytics/top-apps` and `/api/analytics/top-domains`.
 - Frontend production build passes after analytics integration.
 
+Windows-agent follow-up:
+- Added `GET /api/analytics/app-usage-scope` for `overall`, `agent`, `employee`, `manager`, and `project` app-usage rollups.
+- Verified scoped app analytics against the running Windows agent data on port `5002`.
+
 

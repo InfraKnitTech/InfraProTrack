@@ -27,6 +27,7 @@ Current working stack:
 - Admin-only manual normalization is available at `POST /api/agents/events/normalize`.
 - Productivity summary API is available at `GET /api/reports/productivity-summary?group_by=project|manager|shift|employee`.
 - Combined analytics APIs are available at `GET /api/analytics/top-apps` and `GET /api/analytics/top-domains`.
+- Scoped Windows app usage analytics are available at `GET /api/analytics/app-usage-scope?group_by=overall|agent|employee|manager|project`.
 - Seed data verifies baseline admin, manager, employees, shifts, project, manager profile, and productivity rules.
 - Login now returns a JWT directly from `POST /api/auth/login`.
 - OTP has been removed from the active login flow.
