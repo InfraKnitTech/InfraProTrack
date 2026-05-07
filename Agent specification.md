@@ -15,7 +15,7 @@
 | 13 | Multi-shift operations support | **Partially done - schema exists; shift computation missing** | Schema supports shifts/timezones; assignment and overlap calculations still need logic. |
 | 14 | Application & URL Usage Analytics for all users combined | **Partially done** | Added `GET /api/analytics/top-apps`, `GET /api/analytics/top-domains`, and `GET /api/analytics/app-usage-scope` for overall, per-agent, per-employee, per-manager, and per-project app usage views. URL analytics still depend on browser URL capture. |
 | 15 | Manager-wise, Project-wise dashboards with drill-down | **Next to be done** | Frontend shells exist; backend real drill-down APIs still pending. |
-| 16 | UI/API for defining productive and unproductive applications or URLs | **Missing - crucial** | Backend rules tables exist; CRUD APIs and settings UI are pending. |
+| 16 | UI/API for defining productive and unproductive applications or URLs | **Partially done** | Added live backend rule APIs at `/api/rules` for list/create/update/delete and wired the Settings page to show and create/delete live app/domain rules. Project picker, edit flow, and URL capture enforcement still need expansion. |
 | 17 | Productivity index comparison for projects, employees, managers, top performers | **Next to be done** | Needs scoring algorithm and aggregation APIs. |
 | 18 | Productivity scoring algorithm | **Missing - crucial** | Needs formula from workbook/spec plus app/url/idle weights. |
 | 19 | Adaptive screenshots when productivity falls below threshold | **Missing - crucial** | Backend config has threshold placeholder; capture, trigger, and upload path still pending. |
@@ -31,8 +31,8 @@
 | 29 | Graphical analytics for Top 10 Applications and Domains | **Partially done** | Frontend analytics consumes real backend `top-apps` and `top-domains` APIs. Top-app visuals are live; top-domain visuals remain limited until URL capture is added to the Windows agent path. |
 | 30 | Human authentication | **Done** | Done. Admin login uses username `admin` and password `pass123`; OTP was removed by product decision. |
 | 31 | Email-based OTP / Two-factor authentication | **Deferred by product decision** | Requirement says OTP, but user requested removal. Keep deferred unless product decision changes. |
-| 32 | Frontend real dashboard data integration | **Partially done** | Dummy dashboard entries were removed. Overview, analytics, and summary tables now show live backend data only; unsupported sections now render explicit empty states until APIs are added. |
-| 33 | Frontend static screens / basic auth / pending-agent notifications | **Partially done** | Static production-style UI, login, theme, logo, collapsible sidebar, user menu, and pending-agent approval are implemented. Fake sample data has been removed from the dashboard surfaces. |
+| 32 | Frontend real dashboard data integration | **Partially done** | Dummy dashboard entries were removed. Overview, analytics, summary tables, and Settings rule management now show live backend data only; unsupported sections still render explicit empty states until APIs are added. |
+| 33 | Frontend static screens / basic auth / pending-agent notifications | **Partially done** | Static production-style UI, login, theme, logo, collapsible sidebar, user menu, pending-agent approval, and live rule creation/deletion are implemented. Fake sample data has been removed from the dashboard surfaces. |
 | 34 | Role-based access: Admin, Manager, Employee views | **Missing - crucial** | User model has roles, but route guards and API role policies need expansion. |
 | 35 | Employee-to-manager/project/shift mapping | **Missing - crucial** | Seed data exists; admin CRUD and enforcement are pending. |
 | 36 | Privacy, consent, policy controls for screenshots, file tracking, webcam/liveness | **Missing - crucial** | Needs organization policy settings and frontend controls before invasive features. |

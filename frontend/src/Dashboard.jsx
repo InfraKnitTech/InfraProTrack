@@ -28,11 +28,13 @@ import {
   LayoutDashboard,
   LogOut,
   Moon,
+  Plus,
   RefreshCw,
   Search,
   Settings,
   ShieldCheck,
   Sun,
+  Trash2,
   User,
   Users,
 } from 'lucide-react';
@@ -72,6 +74,14 @@ export default function Dashboard() {
   const [employeeSummary, setEmployeeSummary] = useState([]);
   const [shiftSummary, setShiftSummary] = useState([]);
   const [projectSummary, setProjectSummary] = useState([]);
+  const [rules, setRules] = useState([]);
+  const [rulesLoading, setRulesLoading] = useState(false);
+  const [ruleForm, setRuleForm] = useState({
+    app_name: '',
+    domain: '',
+    category: 'productive',
+    severity: 'medium',
+  });
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [pendingAgents, setPendingAgents] = useState([]);
 
@@ -119,6 +129,21 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  const fetchRules = async () => {
+    try {
+      setRulesLoading(true);
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API_BASE}/api/rules`, { headers });
+      setRules(res.data.items || []);
+    } catch (err) {
+      console.error('Failed to fetch rules', err);
+      setRules([]);
+    } finally {
+      setRulesLoading(false);
+    }
+  };
+
   const fetchPendingAgents = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -135,6 +160,10 @@ export default function Dashboard() {
     fetchPendingAgents();
     const interval = setInterval(fetchPendingAgents, 30000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    fetchRules();
   }, []);
 
   const decideAgent = async (requestId, action) => {
@@ -160,6 +189,42 @@ export default function Dashboard() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     navigate('/');
+  };
+
+  const handleRuleChange = (event) => {
+    const { name, value } = event.target;
+    setRuleForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const createRule = async (event) => {
+    event.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_BASE}/api/rules`, ruleForm, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setRuleForm({
+        app_name: '',
+        domain: '',
+        category: 'productive',
+        severity: 'medium',
+      });
+      fetchRules();
+    } catch (err) {
+      console.error('Failed to create rule', err);
+    }
+  };
+
+  const removeRule = async (ruleId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API_BASE}/api/rules/${ruleId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      fetchRules();
+    } catch (err) {
+      console.error('Failed to delete rule', err);
+    }
   };
 
   const nav = [
@@ -471,7 +536,68 @@ export default function Dashboard() {
           <section className="page-grid">
             <div className="panel wide">
               <PanelHeader icon={Settings} title="App and URL Rules" action="Project scoped" />
-              <EmptyState message="No live app rule management API is connected yet." />
+              <div className="rules-layout">
+                <form className="rule-form" onSubmit={createRule}>
+                  <div className="rule-form-grid">
+                    <label>
+                      <span>Application</span>
+                      <input
+                        className="input-field"
+                        name="app_name"
+                        value={ruleForm.app_name}
+                        onChange={handleRuleChange}
+                        placeholder="Visual Studio Code"
+                      />
+                    </label>
+                    <label>
+                      <span>Domain</span>
+                      <input
+                        className="input-field"
+                        name="domain"
+                        value={ruleForm.domain}
+                        onChange={handleRuleChange}
+                        placeholder="youtube.com"
+                      />
+                    </label>
+                    <label>
+                      <span>Category</span>
+                      <select className="input-field" name="category" value={ruleForm.category} onChange={handleRuleChange}>
+                        <option value="productive">Productive</option>
+                        <option value="unproductive">Unproductive</option>
+                        <option value="prohibited">Prohibited</option>
+                        <option value="neutral">Neutral</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Severity</span>
+                      <select className="input-field" name="severity" value={ruleForm.severity} onChange={handleRuleChange}>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                      </select>
+                    </label>
+                  </div>
+                  <button className="btn btn-primary rule-submit" type="submit">
+                    <Plus size={16} />
+                    Add rule
+                  </button>
+                </form>
+
+                <DataTable
+                  columns={['Application', 'Domain', 'Category', 'Severity', 'Project', 'Action']}
+                  rows={rules.map((row) => [
+                    row.app_name || '-',
+                    row.domain || '-',
+                    <span className={`status-pill rule-${row.category}`}>{row.category}</span>,
+                    <span className={`severity ${row.severity}`}>{row.severity}</span>,
+                    row.project_name || 'All projects',
+                    <button className="table-action danger" onClick={() => removeRule(row.id)} aria-label={`Delete rule ${row.id}`}>
+                      <Trash2 size={15} />
+                    </button>,
+                  ])}
+                  emptyMessage={rulesLoading ? 'Loading live rules...' : 'No live rules are configured yet.'}
+                />
+              </div>
             </div>
             <div className="panel">
               <PanelHeader icon={Clock} title="Shift Configuration" action="Overlap ready" />

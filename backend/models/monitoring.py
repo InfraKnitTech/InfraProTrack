@@ -64,3 +64,5 @@ class AppRule(Base):
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    project = relationship("Project")

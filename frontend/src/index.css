@@ -53,7 +53,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -173,6 +174,10 @@ p {
   color: var(--text-primary);
   padding: 0.75rem 1rem;
   outline: none;
+}
+
+select.input-field {
+  appearance: none;
 }
 
 .input-field:focus {
@@ -586,6 +591,21 @@ td {
   background: var(--success-soft);
 }
 
+.status-pill.rule-unproductive {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.status-pill.rule-prohibited {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.status-pill.rule-neutral {
+  color: var(--text-secondary);
+  background: var(--surface-alt);
+}
+
 .legend-list > div {
   justify-content: space-between;
 }
@@ -681,6 +701,57 @@ td {
   text-align: left;
 }
 
+.rules-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.rule-form {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+}
+
+.rule-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.rule-form label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.rule-form label span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.rule-submit {
+  justify-self: start;
+  gap: 0.45rem;
+}
+
+.table-action {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.table-action.danger {
+  color: var(--danger);
+}
+
 .report-card small {
   grid-column: 2;
 }
@@ -768,7 +839,8 @@ td {
 
   .page-grid,
   .formula-grid,
-  .report-grid {
+  .report-grid,
+  .rule-form-grid {
     grid-template-columns: 1fr;
   }
 }

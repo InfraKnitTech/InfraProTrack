@@ -314,4 +314,9 @@ Windows-agent follow-up:
 - Added `GET /api/analytics/app-usage-scope` for `overall`, `agent`, `employee`, `manager`, and `project` app-usage rollups.
 - Verified scoped app analytics against the running Windows agent data on port `5002`.
 
+Current follow-up:
+- Added live backend rule management at `GET/POST /api/rules` and `PUT/DELETE /api/rules/{rule_id}`.
+- Wired the frontend Settings page to show real app/domain rules and create/delete them without dummy data.
+- Verified backend route registration and frontend production build after the rules integration.
+
 

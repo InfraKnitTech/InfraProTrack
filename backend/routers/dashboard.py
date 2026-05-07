@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from core.deps import get_db, get_current_user
 from models.activity_log import ActivityLog
+from models.agent import AgentDevice
 from models.user import User
 from schemas.dashboard import DashboardResponse, MetricCard, ChartPoint, AppUsagePoint
 
@@ -47,7 +48,10 @@ def _extract_app(window_title: str) -> str:
 def admin_dashboard(db: Session = Depends(get_db), _=Depends(get_current_user)):
     activities = db.query(ActivityLog).all()
     total_users = db.query(User).count()
-    active_user_ids: set = set()
+    live_agent_count = db.query(AgentDevice).filter(
+        AgentDevice.is_active.is_(True),
+        AgentDevice.status == "online",
+    ).count()
 
     total_productive = total_idle = total_unproductive = 0
     app_usage: dict = defaultdict(int)
@@ -55,8 +59,6 @@ def admin_dashboard(db: Session = Depends(get_db), _=Depends(get_current_user)):
     daily: dict = defaultdict(lambda: {"productive": 0, "unproductive": 0})
 
     for act in activities:
-        active_user_ids.add(act.user_id)
-
         day_key = act.start_time.strftime("%d %b") if act.start_time else "Today"
         if act.type == "active":
             total_productive += act.duration
@@ -102,7 +104,7 @@ def admin_dashboard(db: Session = Depends(get_db), _=Depends(get_current_user)):
             total_productive=_fmt_hours(total_productive),
             total_idle=_fmt_hours(total_idle),
             total_unproductive=_fmt_hours(total_unproductive),
-            active_employees=len(active_user_ids),
+            active_employees=live_agent_count,
             total_employees=total_users,
         ),
         productivity_data=chart_data,
