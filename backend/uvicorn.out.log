@@ -1,0 +1,22 @@
+InfraProTrack API starting up...
+Database tables verified / created.
+Ready at http://localhost:5000
+Swagger docs: http://localhost:5000/docs
+ReDoc:        http://localhost:5000/redoc
+INFO:     127.0.0.1:58566 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58567 - "GET /api/reports/productivity-summary?group_by=project HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58570 - "GET /api/reports/productivity-summary?group_by=manager HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58571 - "GET /api/reports/productivity-summary?group_by=shift HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58572 - "GET /api/reports/productivity-summary?group_by=employee HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58575 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:58575 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:53903 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53904 - "GET /api/reports/productivity-summary?group_by=project HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57194 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:57194 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:59708 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:59708 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:55338 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:55338 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:58591 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:58591 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
