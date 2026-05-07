@@ -1,0 +1,93 @@
+"""
+InfraProTrack - Employee Productivity Monitoring System
+FastAPI Backend | Docs: /docs  ReDoc: /redoc
+"""
+from contextlib import asynccontextmanager
+import json
+import os
+import uvicorn
+
+# Load configuration
+config_path = os.path.join(os.path.dirname(__file__), "config.json")
+with open(config_path, "r") as f:
+    config = json.load(f)
+
+PORT = config.get("server", {}).get("port", 5001)
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from database import create_all_tables
+from routers import auth, telemetry, dashboard, agents, reports
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """On first run: check DB connection and create all tables if missing."""
+    print("InfraProTrack API starting up...")
+    create_all_tables()
+    print(f"Ready at http://localhost:{PORT}")
+    print(f"Swagger docs: http://localhost:{PORT}/docs")
+    print(f"ReDoc:        http://localhost:{PORT}/redoc")
+    yield
+
+
+app = FastAPI(
+    title="InfraProTrack - Employee Productivity API",
+    description=(
+        "Agent-based employee productivity monitoring system.\n\n"
+        "- **Auth**: JWT username/password login\n"
+        "- **Telemetry**: Real-time activity ingestion from desktop agent\n"
+        "- **Dashboard**: Admin, Manager, Employee views\n"
+    ),
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    lifespan=lifespan,
+)
+
+# CORS - allow frontend on port 5173.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register routers.
+app.include_router(auth.router)
+app.include_router(telemetry.router)
+app.include_router(dashboard.router)
+app.include_router(agents.router)
+app.include_router(reports.router)
+
+
+@app.get("/", tags=["Health"])
+def root():
+    return {
+        "service": "InfraProTrack Productivity API",
+        "version": "2.0.0",
+        "status": "running",
+        "docs": "/docs",
+        "redoc": "/redoc",
+    }
+
+
+@app.get("/health", tags=["Health"])
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/redocs", include_in_schema=False)
+def redocs_alias():
+    return RedirectResponse(url="/redoc")
+
+
+@app.get("/redocs/a", include_in_schema=False)
+def redocs_a_alias():
+    return RedirectResponse(url="/redoc")
+
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=False)

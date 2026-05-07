@@ -1,0 +1,37 @@
+{
+  "server": {
+    "port": 5002,
+    "jwtSecret": "infraprotrack-super-secret-jwt-key-2024",
+    "jwtExpiresIn": "8h"
+  },
+  "mysql": {
+    "host": "10.10.11.80",
+    "port": 3306,
+    "database": "employee-productivity",
+    "username": "asset",
+    "password": "Usn7ets2020#",
+    "dialect": "mysql",
+    "logging": false,
+    "pool": {
+      "max": 20,
+      "min": 0,
+      "acquire": 30000,
+      "idle": 10000
+    }
+  },
+  "email": {
+    "host": "smtp.ethereal.email",
+    "port": 587,
+    "secure": false,
+    "user": "",
+    "pass": "",
+    "from": "\"InfraProTrack Admin\" <admin@protrack.com>"
+  },
+  "agent": {
+    "masterAgentPassword": "InfraAgent@2026",
+    "idleThresholdSeconds": 60,
+    "checkIntervalSeconds": 5,
+    "batchIntervalSeconds": 15,
+    "screenshotTriggerProductivityBelow": 0.4
+  }
+}

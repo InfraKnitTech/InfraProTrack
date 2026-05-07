@@ -1,0 +1,21 @@
+{
+  "server_url": "http://127.0.0.1:5000",
+  "master_password": "InfraAgent@2026",
+  "agent_id": null,
+  "agent_token_id": "",
+  "agent_token": "",
+  "security_key": "",
+  "pending_request_id": "",
+  "device_id": "",
+  "hostname": "",
+  "os_type": "linux",
+  "os_version": "",
+  "agent_version": "0.1.0",
+  "username": "",
+  "check_interval_seconds": 5,
+  "idle_threshold_seconds": 60,
+  "heartbeat_interval_seconds": 30,
+  "batch_interval_seconds": 15,
+  "queue_db_path": "agent_queue.sqlite3",
+  "log_path": "agent.log"
+}

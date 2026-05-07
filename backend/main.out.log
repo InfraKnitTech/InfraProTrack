@@ -1,0 +1,66 @@
+InfraProTrack API starting up...
+Database tables verified / created.
+Ready at http://localhost:5000
+Swagger docs: http://localhost:5000/docs
+ReDoc:        http://localhost:5000/redoc
+INFO:     127.0.0.1:60827 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60828 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60828 - "GET /redocs/a HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:60828 - "GET /redoc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60868 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:60868 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:56304 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:56304 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:56307 - "POST /api/agents/register HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56307 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56307 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56307 - "POST /api/agents/heartbeat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56307 - "POST /api/agents/events/batch HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56309 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56312 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56314 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56314 - "POST /api/agents/events/batch HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56316 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56320 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56321 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56321 - "POST /api/agents/heartbeat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56321 - "POST /api/agents/events/batch HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56324 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58121 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53442 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58121 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51654 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51654 - "POST /api/agents/events/batch HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51656 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49676 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49678 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49678 - "POST /api/agents/heartbeat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49678 - "POST /api/agents/events/batch HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49680 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49684 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60508 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60508 - "POST /api/agents/events/batch HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60508 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60509 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60512 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60512 - "POST /api/agents/heartbeat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60512 - "POST /api/agents/events/batch HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55459 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55468 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55473 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55473 - "POST /api/agents/events/batch HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62178 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59184 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59192 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59192 - "POST /api/agents/heartbeat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59192 - "POST /api/agents/events/batch HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59198 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59201 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56835 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56835 - "POST /api/agents/events/batch HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56835 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56838 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56840 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56840 - "POST /api/agents/heartbeat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56840 - "POST /api/agents/events/batch HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56871 - "GET /api/agents/config HTTP/1.1" 200 OK

@@ -1,0 +1,4 @@
+requests==2.31.0
+psutil==5.9.8
+pywin32
+pyinstaller==6.3.0

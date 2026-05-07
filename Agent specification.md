@@ -1,0 +1,42 @@
+| S.No | Point | Status | Updates |
+| ---: | ----- | ------ | ------- |
+| 1 | Windows agent foundation: device registration, auth token, heartbeat, active window, app session, idle tracking, offline queue | **Done** | Done. Tested auto-registration, approval flow, heartbeat, and raw event batch upload against FastAPI backend. |
+| 2 | Linux agent with same capability as Windows agent: registration, heartbeat, active app/process tracking, idle detection, offline queue | **Done - Ubuntu runtime test pending** | Added separate `linux-agent/` folder with Linux-only agent, config, requirements, user/system systemd installer, remover, registration, heartbeat, active-window/process tracking, idle detection, local SQLite queue, and batch upload. |
+| 3 | Agent lifecycle login/logout tracking using service start/stop or user session hooks | **Partially done - improve reliability** | Windows emits login/logout on agent start/stop. Linux agent now emits login/logout through service start/stop. OS lock/unlock/logoff hooks still need stronger handling. |
+| 4 | Raw event upload from agent to backend | **Done** | Done. `/api/agents/events/batch` accepts authenticated queued events and stores them in `raw_agent_events`. |
+| 5 | Backend device registration, approval, heartbeat storage, raw event storage | **Done** | Done. Master password auto-registration, pending approval, token/security key auth, heartbeat storage, and raw event storage are implemented. |
+| 6 | Convert `raw_agent_events` into normalized `activity_logs`, `app_usages`, `idle_logs`, `file_usages` | **Done** | Added backend normalizer wired into `/api/agents/events/batch` plus admin `POST /api/agents/events/normalize`. Validated DB now has `raw_pending=0`, `activity_logs=94`, `app_usages=20`, `file_usages=48`. |
+| 7 | Project-wise, Manager-wise, Shift-wise Employee Productivity Summary Report | **Done for API** | Added `GET /api/reports/productivity-summary` with `group_by=project|manager|shift|employee` plus optional date filters. Excel export remains tracked under rows 26/27. |
+| 8 | Login, Logout, Productive, Active, Idle duration computation per employee | **Partially done** | Normalizer creates login/logout, active/unproductive app activity, and idle duration records; summary API computes grouped totals and productivity percent. Shift boundary/timezone calculations still pending. |
+| 9 | Productive / Unproductive Application Usage Analysis | **Partially done** | Normalizer now classifies app sessions from `app_rules` and aggregates into `app_usages`. UI/API rule management and richer reporting still pending. |
+| 10 | Productive / Unproductive URL Usage Analysis | **Missing - crucial** | Requires browser URL capture strategy plus URL rules and backend aggregation. |
+| 11 | Files Opened & Worked tracking | **Partially done - needs stronger tracking** | Windows and Linux agents capture best-effort open file paths from process handles, and backend writes `file_usages`. Needs stronger app-specific document tracking. |
+| 12 | Application Start and End Time Detail | **Done for app sessions** | Agents emit raw start/end events and backend now converts `app_session_end` into normalized `activity_logs` with start/end/duration. |
+| 13 | Multi-shift operations support | **Partially done - schema exists; shift computation missing** | Schema supports shifts/timezones; assignment and overlap calculations still need logic. |
+| 14 | Application & URL Usage Analytics for all users combined | **Partially done** | App usage aggregation now writes `app_usages`. URL capture/aggregation and frontend analytics API remain pending. |
+| 15 | Manager-wise, Project-wise dashboards with drill-down | **Next to be done** | Frontend shells exist; backend real drill-down APIs still pending. |
+| 16 | UI/API for defining productive and unproductive applications or URLs | **Missing - crucial** | Backend rules tables exist; CRUD APIs and settings UI are pending. |
+| 17 | Productivity index comparison for projects, employees, managers, top performers | **Next to be done** | Needs scoring algorithm and aggregation APIs. |
+| 18 | Productivity scoring algorithm | **Missing - crucial** | Needs formula from workbook/spec plus app/url/idle weights. |
+| 19 | Adaptive screenshots when productivity falls below threshold | **Missing - crucial** | Backend config has threshold placeholder; capture, trigger, and upload path still pending. |
+| 20 | Screenshot upload endpoint, storage policy, retention policy, access control | **Missing - crucial** | Needs upload API, metadata model, storage directory/S3 adapter, retention settings, and RBAC. |
+| 21 | Adaptive liveness index using webcam | **Missing - high-risk / privacy-sensitive** | Not implemented. Needs explicit privacy policy controls before capture. |
+| 22 | Idle-time break insight | **Partially done - idle detection exists; reason collection missing** | Agents emit idle start/end. Idle reason prompt and reporting are still pending. |
+| 23 | Idle reason prompt on employee machine | **Missing - crucial** | Needs desktop prompt/tray UX and backend field/API support. |
+| 24 | Prohibited application/domain detection | **Next to be done** | Needs rules engine over normalized events and alert records. |
+| 25 | Automatic email alerts to managers for prohibited app/domain usage | **Next to be done** | Needs mail config, manager mapping, alert templates, and delivery logging. |
+| 26 | Manager-wise Project-wise Employee-wise Productivity Report in Excel | **Next to be done** | Needs normalized metrics and Excel export endpoint. |
+| 27 | Employee-wise Comprehensive Productivity Report in Excel | **Next to be done** | Needs normalized employee daily summary and Excel export endpoint. |
+| 28 | Time-zone compatible optimized productivity reports | **Missing - crucial** | Need timezone-aware query boundaries and report generation. |
+| 29 | Graphical analytics for Top 10 Applications and Domains | **Next to be done** | Frontend placeholders exist; real top-app/top-domain APIs pending. |
+| 30 | Human authentication | **Done** | Done. Admin login uses username `admin` and password `pass123`; OTP was removed by product decision. |
+| 31 | Email-based OTP / Two-factor authentication | **Deferred by product decision** | Requirement says OTP, but user requested removal. Keep deferred unless product decision changes. |
+| 32 | Frontend real dashboard data integration | **Next to be done** | Frontend mostly uses static data except auth and pending-agent notifications. |
+| 33 | Frontend static screens / basic auth / pending-agent notifications | **Partially done** | Static production-style UI, login, theme, logo, collapsible sidebar, user menu, and pending-agent approval are implemented. |
+| 34 | Role-based access: Admin, Manager, Employee views | **Missing - crucial** | User model has roles, but route guards and API role policies need expansion. |
+| 35 | Employee-to-manager/project/shift mapping | **Missing - crucial** | Seed data exists; admin CRUD and enforcement are pending. |
+| 36 | Privacy, consent, policy controls for screenshots, file tracking, webcam/liveness | **Missing - crucial** | Needs organization policy settings and frontend controls before invasive features. |
+| 37 | Agent auto-update/version management | **Missing - important** | Agent reports version; update channel and package download are pending. |
+| 38 | Tamper resistance: prevent employee from stopping agent easily | **Missing - important** | Windows service packaging helps, but hardening, recovery, and policy controls are pending. |
+| 39 | Data retention and archival policy | **Missing - important** | Needs retention config and cleanup/archive jobs. |
+| 40 | Audit logs for admin/manager actions | **Missing - important** | Needs audit table and middleware/service for approvals, rule changes, user changes, exports, and settings updates. |
