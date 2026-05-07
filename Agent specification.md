@@ -13,7 +13,7 @@
 | 11 | Files Opened & Worked tracking | **Partially done - needs stronger tracking** | Windows and Linux agents capture best-effort open file paths from process handles, and backend writes `file_usages`. Needs stronger app-specific document tracking. |
 | 12 | Application Start and End Time Detail | **Done for app sessions** | Agents emit raw start/end events and backend now converts `app_session_end` into normalized `activity_logs` with start/end/duration. |
 | 13 | Multi-shift operations support | **Partially done - schema exists; shift computation missing** | Schema supports shifts/timezones; assignment and overlap calculations still need logic. |
-| 14 | Application & URL Usage Analytics for all users combined | **Partially done** | App usage aggregation now writes `app_usages`. URL capture/aggregation and frontend analytics API remain pending. |
+| 14 | Application & URL Usage Analytics for all users combined | **Partially done** | Added `GET /api/analytics/top-apps` and `GET /api/analytics/top-domains` for combined analytics across visible users. Domain analytics are API-ready but still depend on real URL capture. |
 | 15 | Manager-wise, Project-wise dashboards with drill-down | **Next to be done** | Frontend shells exist; backend real drill-down APIs still pending. |
 | 16 | UI/API for defining productive and unproductive applications or URLs | **Missing - crucial** | Backend rules tables exist; CRUD APIs and settings UI are pending. |
 | 17 | Productivity index comparison for projects, employees, managers, top performers | **Next to be done** | Needs scoring algorithm and aggregation APIs. |
@@ -28,10 +28,10 @@
 | 26 | Manager-wise Project-wise Employee-wise Productivity Report in Excel | **Next to be done** | Needs normalized metrics and Excel export endpoint. |
 | 27 | Employee-wise Comprehensive Productivity Report in Excel | **Next to be done** | Needs normalized employee daily summary and Excel export endpoint. |
 | 28 | Time-zone compatible optimized productivity reports | **Missing - crucial** | Need timezone-aware query boundaries and report generation. |
-| 29 | Graphical analytics for Top 10 Applications and Domains | **Next to be done** | Frontend placeholders exist; real top-app/top-domain APIs pending. |
+| 29 | Graphical analytics for Top 10 Applications and Domains | **Partially done** | Frontend analytics now consumes real backend `top-apps` and `top-domains` APIs. Domain charts will become meaningful once agent-side URL capture is implemented. |
 | 30 | Human authentication | **Done** | Done. Admin login uses username `admin` and password `pass123`; OTP was removed by product decision. |
 | 31 | Email-based OTP / Two-factor authentication | **Deferred by product decision** | Requirement says OTP, but user requested removal. Keep deferred unless product decision changes. |
-| 32 | Frontend real dashboard data integration | **Next to be done** | Frontend mostly uses static data except auth and pending-agent notifications. |
+| 32 | Frontend real dashboard data integration | **Partially done** | Overview already used live dashboard data; analytics tab now also uses live backend analytics APIs. Managers, employees, reports, and settings still contain static placeholders. |
 | 33 | Frontend static screens / basic auth / pending-agent notifications | **Partially done** | Static production-style UI, login, theme, logo, collapsible sidebar, user menu, and pending-agent approval are implemented. |
 | 34 | Role-based access: Admin, Manager, Employee views | **Missing - crucial** | User model has roles, but route guards and API role policies need expansion. |
 | 35 | Employee-to-manager/project/shift mapping | **Missing - crucial** | Seed data exists; admin CRUD and enforcement are pending. |

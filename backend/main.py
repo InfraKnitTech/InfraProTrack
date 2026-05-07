@@ -3,21 +3,14 @@ InfraProTrack - Employee Productivity Monitoring System
 FastAPI Backend | Docs: /docs  ReDoc: /redoc
 """
 from contextlib import asynccontextmanager
-import json
-import os
-import uvicorn
-
-# Load configuration
-config_path = os.path.join(os.path.dirname(__file__), "config.json")
-with open(config_path, "r") as f:
-    config = json.load(f)
-
-PORT = config.get("server", {}).get("port", 5001)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+import uvicorn
+
+from core.config import server
 from database import create_all_tables
-from routers import auth, telemetry, dashboard, agents, reports
+from routers import agents, analytics, auth, dashboard, reports, telemetry
 
 
 @asynccontextmanager
@@ -25,9 +18,9 @@ async def lifespan(app: FastAPI):
     """On first run: check DB connection and create all tables if missing."""
     print("InfraProTrack API starting up...")
     create_all_tables()
-    print(f"Ready at http://localhost:{PORT}")
-    print(f"Swagger docs: http://localhost:{PORT}/docs")
-    print(f"ReDoc:        http://localhost:{PORT}/redoc")
+    print(f"Ready at http://localhost:{server.PORT}")
+    print(f"Swagger docs: http://localhost:{server.PORT}/docs")
+    print(f"ReDoc:        http://localhost:{server.PORT}/redoc")
     yield
 
 
@@ -60,6 +53,7 @@ app.include_router(auth.router)
 app.include_router(telemetry.router)
 app.include_router(dashboard.router)
 app.include_router(agents.router)
+app.include_router(analytics.router)
 app.include_router(reports.router)
 
 
@@ -90,4 +84,4 @@ def redocs_a_alias():
 
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=False)
+    uvicorn.run("main:app", host="0.0.0.0", port=server.PORT, reload=False)

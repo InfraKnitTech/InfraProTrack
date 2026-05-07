@@ -298,4 +298,16 @@ Validated after follow-up:
 - Raw normalization verified: `raw_pending=0`, `activity_logs=94`, `app_usages=20`, `file_usages=48`.
 - Productivity summary endpoint tested successfully for `project`, `manager`, `shift`, and `employee` groupings with admin JWT.
 
+Next follow-up completed:
+- Switched `backend/main.py` to read the run port from the shared config module instead of re-reading `config.json`.
+- Startup print lines in `main.py` now use the configured port consistently.
+- Added `GET /api/analytics/top-apps` and `GET /api/analytics/top-domains`.
+- Wired the frontend analytics view to live backend analytics data.
+- Updated `Agent specification.md` to reflect analytics progress.
+
+Validated after analytics follow-up:
+- `python backend/main.py` starts on configured port `5002`.
+- Backend exposes `/api/analytics/top-apps` and `/api/analytics/top-domains`.
+- Frontend production build passes after analytics integration.
+
 

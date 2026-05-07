@@ -39,7 +39,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5002';
 const COLORS = ['#2563eb', '#059669', '#f59e0b', '#dc2626', '#7c3aed', '#0891b2'];
 
 const employees = [
@@ -128,13 +128,16 @@ export default function Dashboard() {
     const fetchData = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await axios.get(`${API_BASE}/api/dashboard/admin`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setMetrics(res.data.metrics);
-        setProductivityData(res.data.productivity_data?.length ? res.data.productivity_data : fallbackTrend);
-        setAppUsageData(res.data.app_usage_data || []);
-        setTopDomains(res.data.top_domains || []);
+        const headers = { Authorization: `Bearer ${token}` };
+        const [dashboardRes, appsRes, domainsRes] = await Promise.all([
+          axios.get(`${API_BASE}/api/dashboard/admin`, { headers }),
+          axios.get(`${API_BASE}/api/analytics/top-apps`, { headers }),
+          axios.get(`${API_BASE}/api/analytics/top-domains`, { headers }),
+        ]);
+        setMetrics(dashboardRes.data.metrics);
+        setProductivityData(dashboardRes.data.productivity_data?.length ? dashboardRes.data.productivity_data : fallbackTrend);
+        setAppUsageData(appsRes.data.items || []);
+        setTopDomains(domainsRes.data.items || []);
       } catch (err) {
         console.error('Failed to fetch dashboard data', err);
       }
@@ -488,7 +491,7 @@ export default function Dashboard() {
               <PanelHeader icon={Activity} title="Application Analytics" action="Top usage" />
               <DataTable
                 columns={['Application', 'Duration', 'Category']}
-                rows={appChart.map((row, index) => [row.name, secondsToHours(row.value), index < 2 ? 'Productive' : 'Neutral'])}
+                rows={appChart.map((row) => [row.name, secondsToHours(row.value), row.category || 'Neutral'])}
               />
             </div>
             <div className="panel">
