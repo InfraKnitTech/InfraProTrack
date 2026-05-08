@@ -47,7 +47,7 @@ Current working stack:
 - Blue/white enterprise theme supports persisted light and dark modes.
 - Dashboard includes overview, managers, employees, analytics, reports, and settings sections.
 - Dashboard includes a live Group tab for custom categories and hierarchy-based rollups across users, manager teams, project teams, and departments, with a designated group leader such as CTO, CEO, manager, or senior engineer.
-- Employees tab now supports employee directory, create/edit/offboard flow, assets, custom weekday shift assignment, shift-block creation, and per-employee insights.
+- Employees tab now uses a Workforce Directory layout with a top-right Add Employee action, in-page create/edit panels, shift timing management, and per-employee details from the row action menu.
 - Employee directory supports filters by name/email, shift, department, designation, project, and status.
 - Agent registration automatically links to an existing employee or creates an employee from the device name for later frontend configuration.
 - Notification bell shows pending agent approvals and supports approve/reject.

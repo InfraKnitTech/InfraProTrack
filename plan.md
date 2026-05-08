@@ -341,4 +341,9 @@ Employee lifecycle follow-up:
 - Employee history records changes to manager/leader, project, shift, department, designation, status, assets, schedule, and profile details.
 - Employees tab now exposes a History view per employee.
 
+Employee UI follow-up:
+- Reworked Employees into a single Workforce Directory view instead of separate top-level sub-tabs.
+- Add Employee is now a primary blue action in the directory header.
+- Shift timings, employee edit, details, insights, and history now open as in-page panels from directory actions.
+
 

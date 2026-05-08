@@ -691,6 +691,7 @@ export default function Dashboard() {
       }
       await axios.delete(`${API_BASE}/api/employees/${employeeId}`, { headers });
       fetchEmployeeDirectory();
+      setEmployeeSubTab('directory');
     } catch (err) {
       if (handleAuthError(err)) {
         return;
@@ -699,7 +700,7 @@ export default function Dashboard() {
     }
   };
 
-  const loadEmployeeInsight = async (employee, nextTab = 'insights') => {
+  const loadEmployeeInsight = async (employee, nextTab = 'details') => {
     try {
       const headers = getAuthHeaders();
       if (!headers) {
@@ -1172,29 +1173,27 @@ export default function Dashboard() {
         {activeTab === 'employees' && (
           <section className="page-grid">
             <div className="panel full">
-              <PanelHeader icon={Users} title="Employee Directory" action="Org employees" />
-              <div className="segmented-tabs">
-                <button className={employeeSubTab === 'directory' ? 'active' : ''} onClick={() => setEmployeeSubTab('directory')}>Directory</button>
-                <button className={employeeSubTab === 'form' ? 'active' : ''} onClick={() => { resetEmployeeForm(); setEmployeeSubTab('form'); }}>
-                  <UserPlus size={15} />
-                  Add employee
-                </button>
-                <button className={employeeSubTab === 'shifts' ? 'active' : ''} onClick={() => setEmployeeSubTab('shifts')}>
-                  <Clock size={15} />
-                  Shift timings
-                </button>
-                <button className={employeeSubTab === 'insights' ? 'active' : ''} onClick={() => setEmployeeSubTab('insights')}>
-                  <Eye size={15} />
-                  Insights
-                </button>
-                <button className={employeeSubTab === 'history' ? 'active' : ''} onClick={() => setEmployeeSubTab('history')}>
-                  <CalendarDays size={15} />
-                  History
-                </button>
-              </div>
-
               {employeeSubTab === 'directory' && (
                 <>
+                  <div className="module-header">
+                    <div>
+                      <Users size={18} />
+                      <div>
+                        <h2>Workforce Directory</h2>
+                        <p>Employees, assignments, status, assets, and monitoring access</p>
+                      </div>
+                    </div>
+                    <div className="module-actions">
+                      <button className="btn btn-secondary" onClick={() => setEmployeeSubTab('shifts')}>
+                        <Clock size={16} />
+                        Shift timings
+                      </button>
+                      <button className="btn btn-primary" onClick={() => { resetEmployeeForm(); setEmployeeSubTab('form'); }}>
+                        <UserPlus size={16} />
+                        Add employee
+                      </button>
+                    </div>
+                  </div>
                   <div className="employee-filter-grid">
                     <input className="input-field" name="name" value={employeeFilters.name} onChange={handleEmployeeFilterChange} placeholder="Search name, username, email" />
                     <select className="input-field" name="department" value={employeeFilters.department} onChange={handleEmployeeFilterChange}>
@@ -1235,17 +1234,8 @@ export default function Dashboard() {
                       employee.created_by_name || '-',
                       employee.assets?.length || 0,
                       <div className="table-action-row">
-                        <button className="table-action" onClick={() => loadEmployeeInsight(employee)} aria-label={`View insights for ${employee.full_name}`}>
-                          <Eye size={15} />
-                        </button>
-                        <button className="table-action" onClick={() => loadEmployeeInsight(employee, 'history')} aria-label={`View history for ${employee.full_name}`}>
-                          <CalendarDays size={15} />
-                        </button>
-                        <button className="table-action" onClick={() => editEmployee(employee)} aria-label={`Edit ${employee.full_name}`}>
+                        <button className="table-action" onClick={() => loadEmployeeInsight(employee, 'details')} aria-label={`Open details for ${employee.full_name}`}>
                           <MoreVertical size={15} />
-                        </button>
-                        <button className="table-action danger" onClick={() => offboardEmployee(employee.id)} aria-label={`Mark ${employee.full_name} as left`}>
-                          <Trash2 size={15} />
                         </button>
                       </div>,
                     ])}
@@ -1255,90 +1245,111 @@ export default function Dashboard() {
               )}
 
               {employeeSubTab === 'form' && (
-                <form className="employee-form" onSubmit={saveEmployee}>
-                  <div className="employee-form-grid">
-                    <label><span>Full name</span><input className="input-field" name="full_name" value={employeeForm.full_name} onChange={handleEmployeeChange} required /></label>
-                    <label><span>Username</span><input className="input-field" name="username" value={employeeForm.username} onChange={handleEmployeeChange} required /></label>
-                    <label><span>Email</span><input className="input-field" type="email" name="email" value={employeeForm.email} onChange={handleEmployeeChange} required /></label>
-                    <label><span>Password</span><input className="input-field" type="password" name="password" value={employeeForm.password} onChange={handleEmployeeChange} placeholder={editingEmployeeId ? 'Leave unchanged' : 'Default: Employee@123'} /></label>
-                    <label><span>Employee code</span><input className="input-field" name="employee_code" value={employeeForm.employee_code} onChange={handleEmployeeChange} /></label>
-                    <label><span>Department / Team</span><input className="input-field" name="department" value={employeeForm.department} onChange={handleEmployeeChange} placeholder="Delivery, Support, Engineering" /></label>
-                    <label><span>Designation</span><input className="input-field" name="designation" value={employeeForm.designation} onChange={handleEmployeeChange} placeholder="Senior Engineer" /></label>
-                    <label><span>Status</span>
-                      <select className="input-field" name="employment_status" value={employeeForm.employment_status} onChange={handleEmployeeChange}>
-                        <option value="working">Working</option>
-                        <option value="retired">Retired</option>
-                        <option value="left">Left org</option>
-                        <option value="inactive">Inactive</option>
-                      </select>
-                    </label>
-                    <label><span>Phone</span><input className="input-field" name="phone" value={employeeForm.phone} onChange={handleEmployeeChange} /></label>
-                    <label><span>Location</span><input className="input-field" name="location" value={employeeForm.location} onChange={handleEmployeeChange} /></label>
-                    <label><span>Manager</span>
-                      <select className="input-field" name="manager_id" value={employeeForm.manager_id} onChange={handleEmployeeChange}>
-                        <option value="">No manager / leader</option>
-                        {groupOptions.users.map((option) => <option key={option.id} value={option.ref_id}>{option.label}</option>)}
-                      </select>
-                    </label>
-                    <label><span>Project</span>
-                      <select className="input-field" name="project_id" value={employeeForm.project_id} onChange={handleEmployeeChange}>
-                        <option value="">No project</option>
-                        {groupOptions.projects.map((option) => <option key={option.id} value={option.ref_id}>{option.label}</option>)}
-                      </select>
-                    </label>
-                    <label><span>Default shift</span>
-                      <select className="input-field" name="shift_id" value={employeeForm.shift_id} onChange={handleEmployeeChange}>
-                        <option value="">No default shift</option>
-                        {shifts.map((shift) => <option key={shift.id} value={shift.id}>{shift.name}</option>)}
-                      </select>
-                    </label>
+                <>
+                  <div className="module-header">
+                    <div>
+                      <UserPlus size={18} />
+                      <div>
+                        <h2>{editingEmployeeId ? 'Edit Employee' : 'Add Employee'}</h2>
+                        <p>Profile, assignment, assets, and weekday schedule</p>
+                      </div>
+                    </div>
+                    <button className="btn btn-secondary" onClick={resetEmployeeForm}>Back to workforce</button>
                   </div>
+                  <form className="employee-form" onSubmit={saveEmployee}>
+                    <div className="employee-form-grid">
+                      <label><span>Full name</span><input className="input-field" name="full_name" value={employeeForm.full_name} onChange={handleEmployeeChange} required /></label>
+                      <label><span>Username</span><input className="input-field" name="username" value={employeeForm.username} onChange={handleEmployeeChange} required /></label>
+                      <label><span>Email</span><input className="input-field" type="email" name="email" value={employeeForm.email} onChange={handleEmployeeChange} required /></label>
+                      <label><span>Password</span><input className="input-field" type="password" name="password" value={employeeForm.password} onChange={handleEmployeeChange} placeholder={editingEmployeeId ? 'Leave unchanged' : 'Default: Employee@123'} /></label>
+                      <label><span>Employee code</span><input className="input-field" name="employee_code" value={employeeForm.employee_code} onChange={handleEmployeeChange} /></label>
+                      <label><span>Department / Team</span><input className="input-field" name="department" value={employeeForm.department} onChange={handleEmployeeChange} placeholder="Delivery, Support, Engineering" /></label>
+                      <label><span>Designation</span><input className="input-field" name="designation" value={employeeForm.designation} onChange={handleEmployeeChange} placeholder="Senior Engineer" /></label>
+                      <label><span>Status</span>
+                        <select className="input-field" name="employment_status" value={employeeForm.employment_status} onChange={handleEmployeeChange}>
+                          <option value="working">Working</option>
+                          <option value="retired">Retired</option>
+                          <option value="left">Left org</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                      </label>
+                      <label><span>Phone</span><input className="input-field" name="phone" value={employeeForm.phone} onChange={handleEmployeeChange} /></label>
+                      <label><span>Location</span><input className="input-field" name="location" value={employeeForm.location} onChange={handleEmployeeChange} /></label>
+                      <label><span>Manager / Leader</span>
+                        <select className="input-field" name="manager_id" value={employeeForm.manager_id} onChange={handleEmployeeChange}>
+                          <option value="">No manager / leader</option>
+                          {groupOptions.users.map((option) => <option key={option.id} value={option.ref_id}>{option.label}</option>)}
+                        </select>
+                      </label>
+                      <label><span>Project</span>
+                        <select className="input-field" name="project_id" value={employeeForm.project_id} onChange={handleEmployeeChange}>
+                          <option value="">No project</option>
+                          {groupOptions.projects.map((option) => <option key={option.id} value={option.ref_id}>{option.label}</option>)}
+                        </select>
+                      </label>
+                      <label><span>Default shift</span>
+                        <select className="input-field" name="shift_id" value={employeeForm.shift_id} onChange={handleEmployeeChange}>
+                          <option value="">No default shift</option>
+                          {shifts.map((shift) => <option key={shift.id} value={shift.id}>{shift.name}</option>)}
+                        </select>
+                      </label>
+                    </div>
 
-                  <div className="employee-subsection">
-                    <div className="subsection-head">
-                      <strong>Weekly custom schedule</strong>
-                      <small>Leave days blank to use the default shift.</small>
+                    <div className="employee-subsection">
+                      <div className="subsection-head">
+                        <strong>Weekly custom schedule</strong>
+                        <small>Leave days blank to use the default shift.</small>
+                      </div>
+                      <div className="weekday-grid">
+                        {WEEKDAYS.map((day, index) => (
+                          <label key={day}>
+                            <span>{day}</span>
+                            <select className="input-field" value={employeeScheduleShiftId(index)} onChange={(event) => setEmployeeWeekdayShift(index, event.target.value)}>
+                              <option value="">Default shift</option>
+                              {shifts.map((shift) => <option key={shift.id} value={shift.id}>{shift.name}</option>)}
+                            </select>
+                          </label>
+                        ))}
+                      </div>
                     </div>
-                    <div className="weekday-grid">
-                      {WEEKDAYS.map((day, index) => (
-                        <label key={day}>
-                          <span>{day}</span>
-                          <select className="input-field" value={employeeScheduleShiftId(index)} onChange={(event) => setEmployeeWeekdayShift(index, event.target.value)}>
-                            <option value="">Default shift</option>
-                            {shifts.map((shift) => <option key={shift.id} value={shift.id}>{shift.name}</option>)}
-                          </select>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
 
-                  <div className="employee-subsection">
-                    <div className="subsection-head">
-                      <strong>Assigned assets</strong>
-                      <button type="button" className="btn btn-secondary" onClick={addEmployeeAsset}><Plus size={15} /> Add asset</button>
+                    <div className="employee-subsection">
+                      <div className="subsection-head">
+                        <strong>Assigned assets</strong>
+                        <button type="button" className="btn btn-secondary" onClick={addEmployeeAsset}><Plus size={15} /> Add asset</button>
+                      </div>
+                      <div className="asset-stack">
+                        {employeeForm.assets.map((asset, index) => (
+                          <div className="asset-row" key={index}>
+                            <input className="input-field" value={asset.asset_type} onChange={(event) => handleEmployeeAssetChange(index, 'asset_type', event.target.value)} placeholder="Laptop, phone, ID card" />
+                            <input className="input-field" value={asset.asset_name} onChange={(event) => handleEmployeeAssetChange(index, 'asset_name', event.target.value)} placeholder="Asset name" />
+                            <input className="input-field" value={asset.asset_tag} onChange={(event) => handleEmployeeAssetChange(index, 'asset_tag', event.target.value)} placeholder="Asset tag" />
+                            <input className="input-field" value={asset.notes} onChange={(event) => handleEmployeeAssetChange(index, 'notes', event.target.value)} placeholder="Notes" />
+                            <button type="button" className="table-action danger" onClick={() => removeEmployeeAsset(index)}><Trash2 size={15} /></button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="asset-stack">
-                      {employeeForm.assets.map((asset, index) => (
-                        <div className="asset-row" key={index}>
-                          <input className="input-field" value={asset.asset_type} onChange={(event) => handleEmployeeAssetChange(index, 'asset_type', event.target.value)} placeholder="Laptop, phone, ID card" />
-                          <input className="input-field" value={asset.asset_name} onChange={(event) => handleEmployeeAssetChange(index, 'asset_name', event.target.value)} placeholder="Asset name" />
-                          <input className="input-field" value={asset.asset_tag} onChange={(event) => handleEmployeeAssetChange(index, 'asset_tag', event.target.value)} placeholder="Asset tag" />
-                          <input className="input-field" value={asset.notes} onChange={(event) => handleEmployeeAssetChange(index, 'notes', event.target.value)} placeholder="Notes" />
-                          <button type="button" className="table-action danger" onClick={() => removeEmployeeAsset(index)}><Trash2 size={15} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
 
-                  <div className="group-builder-actions">
-                    {editingEmployeeId && <button type="button" className="btn btn-secondary" onClick={resetEmployeeForm}>Cancel edit</button>}
-                    <button className="btn btn-primary" type="submit">{editingEmployeeId ? 'Save employee' : 'Create employee'}</button>
-                  </div>
-                </form>
+                    <div className="group-builder-actions">
+                      <button className="btn btn-primary" type="submit">{editingEmployeeId ? 'Save employee' : 'Create employee'}</button>
+                    </div>
+                  </form>
+                </>
               )}
 
               {employeeSubTab === 'shifts' && (
                 <div className="shift-manager">
+                  <div className="module-header">
+                    <div>
+                      <Clock size={18} />
+                      <div>
+                        <h2>Shift Timings</h2>
+                        <p>Reusable shift blocks for default and weekday schedules</p>
+                      </div>
+                    </div>
+                    <button className="btn btn-secondary" onClick={() => setEmployeeSubTab('directory')}>Back to workforce</button>
+                  </div>
                   <form className="shift-form" onSubmit={saveShift}>
                     <div className="shift-form-grid">
                       <label><span>Shift name</span><input className="input-field" name="name" value={shiftForm.name} onChange={handleShiftChange} placeholder="Block A Shift" required /></label>
@@ -1373,14 +1384,38 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {employeeSubTab === 'insights' && (
+              {employeeSubTab === 'details' && (
                 employeeInsight ? (
                   <div className="employee-insight">
+                    <div className="module-header">
+                      <div>
+                        <Eye size={18} />
+                        <div>
+                          <h2>{employeeInsight.employee.full_name}</h2>
+                          <p>{employeeInsight.employee.designation || 'Employee'} - {employeeInsight.employee.department || 'Unassigned department'}</p>
+                        </div>
+                      </div>
+                      <div className="module-actions">
+                        <button className="btn btn-secondary" onClick={() => setEmployeeSubTab('directory')}>Back</button>
+                        <button className="btn btn-secondary" onClick={() => editEmployee(employeeInsight.employee)}>Edit</button>
+                        <button className="btn btn-secondary danger" onClick={() => offboardEmployee(employeeInsight.employee.id)}>Mark left</button>
+                      </div>
+                    </div>
                     <div className="insight-strip">
                       <div><span>Employee</span><strong>{employeeInsight.employee.full_name}</strong></div>
                       <div><span>Productive</span><strong>{secondsToHours(employeeInsight.productive_seconds)}</strong></div>
                       <div><span>Idle</span><strong>{secondsToHours(employeeInsight.idle_seconds)}</strong></div>
                       <div><span>Score</span><strong>{Math.round(employeeInsight.productivity_percent)}%</strong></div>
+                    </div>
+                    <div className="detail-grid">
+                      <div><span>Email</span><strong>{employeeInsight.employee.email}</strong></div>
+                      <div><span>Phone</span><strong>{employeeInsight.employee.phone || '-'}</strong></div>
+                      <div><span>Location</span><strong>{employeeInsight.employee.location || '-'}</strong></div>
+                      <div><span>Status</span><strong>{employeeInsight.employee.employment_status}</strong></div>
+                      <div><span>Manager / Leader</span><strong>{employeeInsight.employee.manager_name || '-'}</strong></div>
+                      <div><span>Project</span><strong>{employeeInsight.employee.project_name || '-'}</strong></div>
+                      <div><span>Default shift</span><strong>{employeeInsight.employee.shift_name || '-'}</strong></div>
+                      <div><span>Created by</span><strong>{employeeInsight.employee.created_by_name || 'System'}</strong></div>
                     </div>
                     <DataTable
                       columns={['Type', 'App', 'Window', 'Duration', 'Start']}
@@ -1393,19 +1428,6 @@ export default function Dashboard() {
                       ])}
                       emptyMessage="No activity recorded for this employee yet."
                     />
-                  </div>
-                ) : <EmptyState message={selectedEmployeeInsight ? 'Loading employee insights...' : 'Select an employee from the directory to view insights.'} />
-              )}
-
-              {employeeSubTab === 'history' && (
-                employeeInsight ? (
-                  <div className="employee-insight">
-                    <div className="insight-strip">
-                      <div><span>Employee</span><strong>{employeeInsight.employee.full_name}</strong></div>
-                      <div><span>Department</span><strong>{employeeInsight.employee.department || '-'}</strong></div>
-                      <div><span>Designation</span><strong>{employeeInsight.employee.designation || '-'}</strong></div>
-                      <div><span>Status</span><strong>{employeeInsight.employee.employment_status}</strong></div>
-                    </div>
                     <DataTable
                       columns={['When', 'Change', 'Field', 'Old', 'New', 'Changed by']}
                       rows={(employeeInsight.history || []).map((row) => [
@@ -1419,7 +1441,7 @@ export default function Dashboard() {
                       emptyMessage="No employee history has been recorded yet."
                     />
                   </div>
-                ) : <EmptyState message="Select an employee from the directory to view history." />
+                ) : <EmptyState message={selectedEmployeeInsight ? 'Loading employee details...' : 'Select an employee from the workforce directory.'} />
               )}
             </div>
           </section>

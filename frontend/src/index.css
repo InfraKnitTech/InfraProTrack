@@ -211,6 +211,11 @@ select.input-field {
   border: 1px solid var(--surface-border);
 }
 
+.btn-secondary.danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 28%, var(--surface-border));
+}
+
 .animate-fade-in {
   animation: fadeIn 0.25s ease-out;
 }
@@ -739,6 +744,43 @@ td {
   color: var(--primary-strong);
 }
 
+.module-header {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.module-header > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.module-header h2 {
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.module-header p {
+  font-size: 0.82rem;
+}
+
+.module-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.module-actions .btn {
+  gap: 0.45rem;
+}
+
 .employee-form,
 .shift-manager,
 .shift-form,
@@ -814,14 +856,28 @@ td {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.insight-strip > div {
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.insight-strip > div,
+.detail-grid > div {
   border: 1px solid var(--surface-border);
   border-radius: 8px;
   background: var(--surface-alt);
   padding: 0.85rem;
 }
 
-.insight-strip strong {
+.detail-grid span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.insight-strip strong,
+.detail-grid strong {
   display: block;
   margin-top: 0.25rem;
 }
@@ -1115,7 +1171,8 @@ td {
   .weekday-grid,
   .employee-filter-grid,
   .asset-row,
-  .insight-strip {
+  .insight-strip,
+  .detail-grid {
     grid-template-columns: 1fr;
   }
 
