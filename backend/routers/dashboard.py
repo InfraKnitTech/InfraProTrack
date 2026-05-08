@@ -46,11 +46,18 @@ def _extract_app(window_title: str) -> str:
 
 @router.get("/admin", response_model=DashboardResponse, summary="Admin org-wide dashboard")
 def admin_dashboard(db: Session = Depends(get_db), _=Depends(get_current_user)):
-    activities = db.query(ActivityLog).all()
-    total_users = db.query(User).count()
+    activities = db.query(ActivityLog).join(User, ActivityLog.user_id == User.id).filter(
+        User.role == "employee",
+        User.is_active.is_(True),
+    ).all()
+    total_users = db.query(User).filter(
+        User.role == "employee",
+        User.is_active.is_(True),
+    ).count()
     live_agent_count = db.query(AgentDevice).filter(
         AgentDevice.is_active.is_(True),
         AgentDevice.status == "online",
+        AgentDevice.user_id.isnot(None),
     ).count()
 
     total_productive = total_idle = total_unproductive = 0
