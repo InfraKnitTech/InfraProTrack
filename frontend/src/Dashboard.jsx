@@ -19,15 +19,18 @@ import {
   BarChart3,
   Bell,
   Building2,
+  Briefcase,
   ChevronLeft,
   CalendarDays,
   ChevronRight,
   Clock,
   Download,
+  Eye,
   FileSpreadsheet,
   FolderTree,
   LayoutDashboard,
   LogOut,
+  MoreVertical,
   Moon,
   Plus,
   RefreshCw,
@@ -37,6 +40,7 @@ import {
   Sun,
   Trash2,
   User,
+  UserPlus,
   Users,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -74,6 +78,67 @@ function memberOptions(groupOptions, memberType) {
   return groupOptions.users || [];
 }
 
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+function blankEmployeeForm() {
+  return {
+    username: '',
+    full_name: '',
+    email: '',
+    password: '',
+    employee_code: '',
+    department: '',
+    phone: '',
+    location: '',
+    designation: '',
+    employment_status: 'working',
+    manager_id: '',
+    project_id: '',
+    shift_id: '',
+    assets: [{ asset_type: '', asset_name: '', asset_tag: '', notes: '' }],
+    schedule: [],
+  };
+}
+
+function blankShiftForm() {
+  return {
+    name: '',
+    start_time: '09:00',
+    end_time: '18:00',
+    timezone: 'Asia/Kolkata',
+    grace_minutes: 10,
+    is_overnight: 0,
+  };
+}
+
+function employeeFormFromRecord(employee) {
+  return {
+    username: employee.username || '',
+    full_name: employee.full_name || '',
+    email: employee.email || '',
+    password: '',
+    employee_code: employee.employee_code || '',
+    department: employee.department || '',
+    phone: employee.phone || '',
+    location: employee.location || '',
+    designation: employee.designation || '',
+    employment_status: employee.employment_status || 'working',
+    manager_id: employee.manager_id || '',
+    project_id: employee.project_id || '',
+    shift_id: employee.shift_id || '',
+    assets: employee.assets?.length ? employee.assets.map((asset) => ({
+      asset_type: asset.asset_type || '',
+      asset_name: asset.asset_name || '',
+      asset_tag: asset.asset_tag || '',
+      notes: asset.notes || '',
+    })) : [{ asset_type: '', asset_name: '', asset_tag: '', notes: '' }],
+    schedule: employee.schedule?.map((item) => ({
+      weekday: item.weekday,
+      shift_id: item.shift_id,
+    })) || [],
+  };
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
@@ -92,6 +157,15 @@ export default function Dashboard() {
   const [topDomains, setTopDomains] = useState([]);
   const [managerSummary, setManagerSummary] = useState([]);
   const [employeeSummary, setEmployeeSummary] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [employeeSubTab, setEmployeeSubTab] = useState('directory');
+  const [employeeForm, setEmployeeForm] = useState(blankEmployeeForm());
+  const [editingEmployeeId, setEditingEmployeeId] = useState(null);
+  const [selectedEmployeeInsight, setSelectedEmployeeInsight] = useState(null);
+  const [employeeInsight, setEmployeeInsight] = useState(null);
+  const [shifts, setShifts] = useState([]);
+  const [shiftForm, setShiftForm] = useState(blankShiftForm());
+  const [editingShiftId, setEditingShiftId] = useState(null);
   const [shiftSummary, setShiftSummary] = useState([]);
   const [projectSummary, setProjectSummary] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -229,6 +303,26 @@ export default function Dashboard() {
     }
   };
 
+  const fetchEmployeeDirectory = async () => {
+    try {
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      const [employeesRes, shiftsRes] = await Promise.all([
+        axios.get(`${API_BASE}/api/employees`, { headers }),
+        axios.get(`${API_BASE}/api/shifts`, { headers }),
+      ]);
+      setEmployees(employeesRes.data.items || []);
+      setShifts(shiftsRes.data.items || []);
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to fetch employees and shifts', err);
+    }
+  };
+
   const fetchPendingAgents = async () => {
     try {
       const headers = getAuthHeaders();
@@ -259,6 +353,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchGroups();
+  }, []);
+
+  useEffect(() => {
+    fetchEmployeeDirectory();
   }, []);
 
   const decideAgent = async (requestId, action) => {
@@ -476,6 +574,174 @@ export default function Dashboard() {
       leader_title: '',
       members: [createGroupMemberDraft()],
     });
+  };
+
+  const handleEmployeeChange = (event) => {
+    const { name, value } = event.target;
+    setEmployeeForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleEmployeeAssetChange = (index, field, value) => {
+    setEmployeeForm((current) => ({
+      ...current,
+      assets: current.assets.map((asset, assetIndex) => (
+        assetIndex === index ? { ...asset, [field]: value } : asset
+      )),
+    }));
+  };
+
+  const addEmployeeAsset = () => {
+    setEmployeeForm((current) => ({
+      ...current,
+      assets: [...current.assets, { asset_type: '', asset_name: '', asset_tag: '', notes: '' }],
+    }));
+  };
+
+  const removeEmployeeAsset = (index) => {
+    setEmployeeForm((current) => ({
+      ...current,
+      assets: current.assets.filter((_, assetIndex) => assetIndex !== index),
+    }));
+  };
+
+  const setEmployeeWeekdayShift = (weekday, shiftId) => {
+    setEmployeeForm((current) => {
+      const schedule = current.schedule.filter((item) => item.weekday !== weekday);
+      if (shiftId) {
+        schedule.push({ weekday, shift_id: Number(shiftId) });
+      }
+      schedule.sort((a, b) => a.weekday - b.weekday);
+      return { ...current, schedule };
+    });
+  };
+
+  const employeeScheduleShiftId = (weekday) => {
+    const row = employeeForm.schedule.find((item) => item.weekday === weekday);
+    return row?.shift_id || '';
+  };
+
+  const saveEmployee = async (event) => {
+    event.preventDefault();
+    try {
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      const payload = {
+        ...employeeForm,
+        manager_id: employeeForm.manager_id ? Number(employeeForm.manager_id) : null,
+        project_id: employeeForm.project_id ? Number(employeeForm.project_id) : null,
+        shift_id: employeeForm.shift_id ? Number(employeeForm.shift_id) : null,
+        password: employeeForm.password || null,
+        assets: employeeForm.assets.filter((asset) => asset.asset_name.trim()),
+        schedule: employeeForm.schedule,
+      };
+      if (editingEmployeeId) {
+        await axios.put(`${API_BASE}/api/employees/${editingEmployeeId}`, payload, { headers });
+      } else {
+        await axios.post(`${API_BASE}/api/employees`, payload, { headers });
+      }
+      resetEmployeeForm();
+      fetchEmployeeDirectory();
+      fetchGroups();
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to save employee', err);
+    }
+  };
+
+  const editEmployee = (employee) => {
+    setEditingEmployeeId(employee.id);
+    setEmployeeForm(employeeFormFromRecord(employee));
+    setEmployeeSubTab('form');
+  };
+
+  const resetEmployeeForm = () => {
+    setEditingEmployeeId(null);
+    setEmployeeForm(blankEmployeeForm());
+    setEmployeeSubTab('directory');
+  };
+
+  const offboardEmployee = async (employeeId) => {
+    try {
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      await axios.delete(`${API_BASE}/api/employees/${employeeId}`, { headers });
+      fetchEmployeeDirectory();
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to offboard employee', err);
+    }
+  };
+
+  const loadEmployeeInsight = async (employee) => {
+    try {
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      setSelectedEmployeeInsight(employee);
+      setEmployeeSubTab('insights');
+      const res = await axios.get(`${API_BASE}/api/employees/${employee.id}/insights`, { headers });
+      setEmployeeInsight(res.data);
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to load employee insights', err);
+    }
+  };
+
+  const handleShiftChange = (event) => {
+    const { name, value } = event.target;
+    setShiftForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const saveShift = async (event) => {
+    event.preventDefault();
+    try {
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      const payload = {
+        ...shiftForm,
+        grace_minutes: Number(shiftForm.grace_minutes || 0),
+        is_overnight: Number(shiftForm.is_overnight || 0),
+      };
+      if (editingShiftId) {
+        await axios.put(`${API_BASE}/api/shifts/${editingShiftId}`, payload, { headers });
+      } else {
+        await axios.post(`${API_BASE}/api/shifts`, payload, { headers });
+      }
+      setShiftForm(blankShiftForm());
+      setEditingShiftId(null);
+      fetchEmployeeDirectory();
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to save shift', err);
+    }
+  };
+
+  const editShift = (shift) => {
+    setEditingShiftId(shift.id);
+    setShiftForm({
+      name: shift.name,
+      start_time: shift.start_time?.slice(0, 5) || '09:00',
+      end_time: shift.end_time?.slice(0, 5) || '18:00',
+      timezone: shift.timezone || 'Asia/Kolkata',
+      grace_minutes: shift.grace_minutes ?? 10,
+      is_overnight: shift.is_overnight || 0,
+    });
+    setEmployeeSubTab('shifts');
   };
 
   const nav = [
@@ -882,39 +1148,195 @@ export default function Dashboard() {
         {activeTab === 'employees' && (
           <section className="page-grid">
             <div className="panel full">
-              <PanelHeader icon={Activity} title="Employee Activity" action="Live summary" />
-              <DataTable
-                columns={['Employee', 'Logins', 'Logouts', 'Productive', 'Active', 'Idle', 'Productivity %']}
-                rows={employeeSummary.map((row) => [
-                  row.group_name,
-                  row.login_count,
-                  row.logout_count,
-                  secondsToHours(row.productive_seconds),
-                  secondsToHours(row.active_seconds),
-                  secondsToHours(row.idle_seconds),
-                  <span className={`score ${scoreTone(Math.round(row.productivity_percent))}`}>{Math.round(row.productivity_percent)}</span>,
-                ])}
-                emptyMessage="No live employee summary data yet."
-              />
-            </div>
-            <div className="panel wide">
-              <PanelHeader icon={Clock} title="Shift Coverage" action="Timezone aware" />
-              <DataTable
-                columns={['Shift', 'Employees', 'Productive', 'Active', 'Idle', 'Productivity %']}
-                rows={shiftSummary.map((row) => [
-                  row.group_name,
-                  row.employee_count,
-                  secondsToHours(row.productive_seconds),
-                  secondsToHours(row.active_seconds),
-                  secondsToHours(row.idle_seconds),
-                  <span className={`score ${scoreTone(Math.round(row.productivity_percent))}`}>{Math.round(row.productivity_percent)}</span>,
-                ])}
-                emptyMessage="No live shift summary data yet."
-              />
-            </div>
-            <div className="panel">
-              <PanelHeader icon={CalendarDays} title="Daily Timeline" action="Today" />
-              <EmptyState message="No live per-employee timeline API connected yet." />
+              <PanelHeader icon={Users} title="Employee Directory" action="Org employees" />
+              <div className="segmented-tabs">
+                <button className={employeeSubTab === 'directory' ? 'active' : ''} onClick={() => setEmployeeSubTab('directory')}>Directory</button>
+                <button className={employeeSubTab === 'form' ? 'active' : ''} onClick={() => { resetEmployeeForm(); setEmployeeSubTab('form'); }}>
+                  <UserPlus size={15} />
+                  Add employee
+                </button>
+                <button className={employeeSubTab === 'shifts' ? 'active' : ''} onClick={() => setEmployeeSubTab('shifts')}>
+                  <Clock size={15} />
+                  Shift timings
+                </button>
+                <button className={employeeSubTab === 'insights' ? 'active' : ''} onClick={() => setEmployeeSubTab('insights')}>
+                  <Eye size={15} />
+                  Insights
+                </button>
+              </div>
+
+              {employeeSubTab === 'directory' && (
+                <DataTable
+                  columns={['Employee', 'Department', 'Designation', 'Status', 'Email', 'Phone', 'Location', 'Shift', 'Created by', 'Assets', 'Actions']}
+                  rows={employees.map((employee) => [
+                    employee.full_name,
+                    employee.department || '-',
+                    employee.designation || '-',
+                    <span className={`status-pill employee-${employee.employment_status}`}>{employee.employment_status}</span>,
+                    employee.email,
+                    employee.phone || '-',
+                    employee.location || '-',
+                    employee.shift_name || '-',
+                    employee.created_by_name || '-',
+                    employee.assets?.length || 0,
+                    <div className="table-action-row">
+                      <button className="table-action" onClick={() => loadEmployeeInsight(employee)} aria-label={`View insights for ${employee.full_name}`}>
+                        <Eye size={15} />
+                      </button>
+                      <button className="table-action" onClick={() => editEmployee(employee)} aria-label={`Edit ${employee.full_name}`}>
+                        <MoreVertical size={15} />
+                      </button>
+                      <button className="table-action danger" onClick={() => offboardEmployee(employee.id)} aria-label={`Mark ${employee.full_name} as left`}>
+                        <Trash2 size={15} />
+                      </button>
+                    </div>,
+                  ])}
+                  emptyMessage="No employees created yet."
+                />
+              )}
+
+              {employeeSubTab === 'form' && (
+                <form className="employee-form" onSubmit={saveEmployee}>
+                  <div className="employee-form-grid">
+                    <label><span>Full name</span><input className="input-field" name="full_name" value={employeeForm.full_name} onChange={handleEmployeeChange} required /></label>
+                    <label><span>Username</span><input className="input-field" name="username" value={employeeForm.username} onChange={handleEmployeeChange} required /></label>
+                    <label><span>Email</span><input className="input-field" type="email" name="email" value={employeeForm.email} onChange={handleEmployeeChange} required /></label>
+                    <label><span>Password</span><input className="input-field" type="password" name="password" value={employeeForm.password} onChange={handleEmployeeChange} placeholder={editingEmployeeId ? 'Leave unchanged' : 'Default: Employee@123'} /></label>
+                    <label><span>Employee code</span><input className="input-field" name="employee_code" value={employeeForm.employee_code} onChange={handleEmployeeChange} /></label>
+                    <label><span>Department / Team</span><input className="input-field" name="department" value={employeeForm.department} onChange={handleEmployeeChange} placeholder="Delivery, Support, Engineering" /></label>
+                    <label><span>Designation</span><input className="input-field" name="designation" value={employeeForm.designation} onChange={handleEmployeeChange} placeholder="Senior Engineer" /></label>
+                    <label><span>Status</span>
+                      <select className="input-field" name="employment_status" value={employeeForm.employment_status} onChange={handleEmployeeChange}>
+                        <option value="working">Working</option>
+                        <option value="retired">Retired</option>
+                        <option value="left">Left org</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </label>
+                    <label><span>Phone</span><input className="input-field" name="phone" value={employeeForm.phone} onChange={handleEmployeeChange} /></label>
+                    <label><span>Location</span><input className="input-field" name="location" value={employeeForm.location} onChange={handleEmployeeChange} /></label>
+                    <label><span>Manager</span>
+                      <select className="input-field" name="manager_id" value={employeeForm.manager_id} onChange={handleEmployeeChange}>
+                        <option value="">No manager</option>
+                        {groupOptions.managers.map((option) => <option key={option.id} value={option.ref_id}>{option.label}</option>)}
+                      </select>
+                    </label>
+                    <label><span>Project</span>
+                      <select className="input-field" name="project_id" value={employeeForm.project_id} onChange={handleEmployeeChange}>
+                        <option value="">No project</option>
+                        {groupOptions.projects.map((option) => <option key={option.id} value={option.ref_id}>{option.label}</option>)}
+                      </select>
+                    </label>
+                    <label><span>Default shift</span>
+                      <select className="input-field" name="shift_id" value={employeeForm.shift_id} onChange={handleEmployeeChange}>
+                        <option value="">No default shift</option>
+                        {shifts.map((shift) => <option key={shift.id} value={shift.id}>{shift.name}</option>)}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="employee-subsection">
+                    <div className="subsection-head">
+                      <strong>Weekly custom schedule</strong>
+                      <small>Leave days blank to use the default shift.</small>
+                    </div>
+                    <div className="weekday-grid">
+                      {WEEKDAYS.map((day, index) => (
+                        <label key={day}>
+                          <span>{day}</span>
+                          <select className="input-field" value={employeeScheduleShiftId(index)} onChange={(event) => setEmployeeWeekdayShift(index, event.target.value)}>
+                            <option value="">Default shift</option>
+                            {shifts.map((shift) => <option key={shift.id} value={shift.id}>{shift.name}</option>)}
+                          </select>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="employee-subsection">
+                    <div className="subsection-head">
+                      <strong>Assigned assets</strong>
+                      <button type="button" className="btn btn-secondary" onClick={addEmployeeAsset}><Plus size={15} /> Add asset</button>
+                    </div>
+                    <div className="asset-stack">
+                      {employeeForm.assets.map((asset, index) => (
+                        <div className="asset-row" key={index}>
+                          <input className="input-field" value={asset.asset_type} onChange={(event) => handleEmployeeAssetChange(index, 'asset_type', event.target.value)} placeholder="Laptop, phone, ID card" />
+                          <input className="input-field" value={asset.asset_name} onChange={(event) => handleEmployeeAssetChange(index, 'asset_name', event.target.value)} placeholder="Asset name" />
+                          <input className="input-field" value={asset.asset_tag} onChange={(event) => handleEmployeeAssetChange(index, 'asset_tag', event.target.value)} placeholder="Asset tag" />
+                          <input className="input-field" value={asset.notes} onChange={(event) => handleEmployeeAssetChange(index, 'notes', event.target.value)} placeholder="Notes" />
+                          <button type="button" className="table-action danger" onClick={() => removeEmployeeAsset(index)}><Trash2 size={15} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="group-builder-actions">
+                    {editingEmployeeId && <button type="button" className="btn btn-secondary" onClick={resetEmployeeForm}>Cancel edit</button>}
+                    <button className="btn btn-primary" type="submit">{editingEmployeeId ? 'Save employee' : 'Create employee'}</button>
+                  </div>
+                </form>
+              )}
+
+              {employeeSubTab === 'shifts' && (
+                <div className="shift-manager">
+                  <form className="shift-form" onSubmit={saveShift}>
+                    <div className="shift-form-grid">
+                      <label><span>Shift name</span><input className="input-field" name="name" value={shiftForm.name} onChange={handleShiftChange} placeholder="Block A Shift" required /></label>
+                      <label><span>Start</span><input className="input-field" type="time" name="start_time" value={shiftForm.start_time} onChange={handleShiftChange} required /></label>
+                      <label><span>End</span><input className="input-field" type="time" name="end_time" value={shiftForm.end_time} onChange={handleShiftChange} required /></label>
+                      <label><span>Timezone</span><input className="input-field" name="timezone" value={shiftForm.timezone} onChange={handleShiftChange} /></label>
+                      <label><span>Grace minutes</span><input className="input-field" type="number" name="grace_minutes" value={shiftForm.grace_minutes} onChange={handleShiftChange} /></label>
+                      <label><span>Overnight</span>
+                        <select className="input-field" name="is_overnight" value={shiftForm.is_overnight} onChange={handleShiftChange}>
+                          <option value={0}>No</option>
+                          <option value={1}>Yes</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div className="group-builder-actions">
+                      {editingShiftId && <button type="button" className="btn btn-secondary" onClick={() => { setEditingShiftId(null); setShiftForm(blankShiftForm()); }}>Cancel edit</button>}
+                      <button className="btn btn-primary" type="submit">{editingShiftId ? 'Save shift' : 'Create shift'}</button>
+                    </div>
+                  </form>
+                  <DataTable
+                    columns={['Shift', 'Timing', 'Timezone', 'Grace', 'Overnight', 'Action']}
+                    rows={shifts.map((shift) => [
+                      shift.name,
+                      `${shift.start_time?.slice(0, 5)} - ${shift.end_time?.slice(0, 5)}`,
+                      shift.timezone,
+                      `${shift.grace_minutes} min`,
+                      shift.is_overnight ? 'Yes' : 'No',
+                      <button className="table-action" onClick={() => editShift(shift)}><MoreVertical size={15} /></button>,
+                    ])}
+                    emptyMessage="No custom shift blocks created yet."
+                  />
+                </div>
+              )}
+
+              {employeeSubTab === 'insights' && (
+                employeeInsight ? (
+                  <div className="employee-insight">
+                    <div className="insight-strip">
+                      <div><span>Employee</span><strong>{employeeInsight.employee.full_name}</strong></div>
+                      <div><span>Productive</span><strong>{secondsToHours(employeeInsight.productive_seconds)}</strong></div>
+                      <div><span>Idle</span><strong>{secondsToHours(employeeInsight.idle_seconds)}</strong></div>
+                      <div><span>Score</span><strong>{Math.round(employeeInsight.productivity_percent)}%</strong></div>
+                    </div>
+                    <DataTable
+                      columns={['Type', 'App', 'Window', 'Duration', 'Start']}
+                      rows={employeeInsight.recent_activity.map((row) => [
+                        row.type,
+                        row.app_name || '-',
+                        row.window_title || '-',
+                        secondsToHours(row.duration),
+                        row.start_time ? new Date(row.start_time).toLocaleString() : '-',
+                      ])}
+                      emptyMessage="No activity recorded for this employee yet."
+                    />
+                  </div>
+                ) : <EmptyState message={selectedEmployeeInsight ? 'Loading employee insights...' : 'Select an employee from the directory to view insights.'} />
+              )}
             </div>
           </section>
         )}

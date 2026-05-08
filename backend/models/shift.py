@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Time, DateTime
+from sqlalchemy import Column, Integer, String, Time, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
@@ -17,3 +17,16 @@ class Shift(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     users = relationship("User", back_populates="shift")
+
+
+class EmployeeShiftAssignment(Base):
+    __tablename__ = "employee_shift_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    weekday = Column(Integer, nullable=False, index=True)  # Monday=0, Sunday=6
+    shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="shift_assignments")
+    shift = relationship("Shift")

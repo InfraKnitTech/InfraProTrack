@@ -329,4 +329,10 @@ Leader and edit follow-up:
 - Added `PUT /api/groups/{group_id}` and frontend edit mode for existing groups.
 - Group builder now supports naming a leader such as CTO, CEO, manager, department head, or senior engineer independent of the membership hierarchy.
 
+Employee management follow-up:
+- Added employee profile fields for phone, location, designation, employment status, and creator tracking.
+- Added employee asset assignment and per-employee weekday shift assignments.
+- Added employee CRUD, offboarding, insights, and shift-block CRUD APIs.
+- Rebuilt the Employees tab around live directory, add/edit employee, custom shift creation, and employee insights views.
+
 

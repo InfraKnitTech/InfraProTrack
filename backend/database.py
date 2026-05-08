@@ -36,6 +36,7 @@ def create_all_tables():
 
     Base.metadata.create_all(bind=engine)
     _ensure_group_columns()
+    _ensure_employee_columns()
     print("Database tables verified / created.")
 
 
@@ -49,6 +50,29 @@ def _ensure_group_columns():
         statements.append("ALTER TABLE custom_groups ADD COLUMN leader_user_id INTEGER NULL")
     if "leader_title" not in columns:
         statements.append("ALTER TABLE custom_groups ADD COLUMN leader_title VARCHAR(160) NULL")
+    if not statements:
+        return
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
+
+
+def _ensure_employee_columns():
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("users")}
+    statements: list[str] = []
+    additions = {
+        "phone": "VARCHAR(40) NULL",
+        "location": "VARCHAR(160) NULL",
+        "designation": "VARCHAR(160) NULL",
+        "employment_status": "VARCHAR(40) NOT NULL DEFAULT 'working'",
+        "created_by_id": "INTEGER NULL",
+    }
+    for column_name, definition in additions.items():
+        if column_name not in columns:
+            statements.append(f"ALTER TABLE users ADD COLUMN {column_name} {definition}")
     if not statements:
         return
     with engine.begin() as connection:

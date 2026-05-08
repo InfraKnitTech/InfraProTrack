@@ -712,6 +712,121 @@ td {
   gap: 1rem;
 }
 
+.segmented-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+}
+
+.segmented-tabs button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0 0.75rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.segmented-tabs button.active {
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+}
+
+.employee-form,
+.shift-manager,
+.shift-form,
+.employee-insight {
+  display: grid;
+  gap: 1rem;
+}
+
+.employee-form-grid,
+.shift-form-grid,
+.weekday-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.employee-form label,
+.shift-form label,
+.weekday-grid label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.employee-form label span,
+.shift-form label span,
+.weekday-grid label span,
+.subsection-head small,
+.insight-strip span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.employee-subsection {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+  padding: 0.9rem;
+}
+
+.subsection-head,
+.asset-row,
+.insight-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.subsection-head {
+  justify-content: space-between;
+}
+
+.asset-stack {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.asset-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+}
+
+.insight-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.insight-strip > div {
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+  padding: 0.85rem;
+}
+
+.insight-strip strong {
+  display: block;
+  margin-top: 0.25rem;
+}
+
+.status-pill.employee-left,
+.status-pill.employee-retired,
+.status-pill.employee-inactive {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
 .group-builder,
 .group-cards {
   display: grid;
@@ -988,7 +1103,12 @@ td {
   .rule-form-grid,
   .group-form-grid,
   .group-member-grid,
-  .group-cards {
+  .group-cards,
+  .employee-form-grid,
+  .shift-form-grid,
+  .weekday-grid,
+  .asset-row,
+  .insight-strip {
     grid-template-columns: 1fr;
   }
 
