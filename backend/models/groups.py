@@ -13,6 +13,8 @@ class CustomGroup(Base):
     name = Column(String(160), nullable=False)
     category_name = Column(String(120), nullable=False, index=True)
     description = Column(Text, nullable=True)
+    leader_user_id = Column(Integer, nullable=True, index=True)
+    leader_title = Column(String(160), nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

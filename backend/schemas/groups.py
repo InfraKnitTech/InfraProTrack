@@ -19,6 +19,17 @@ class GroupCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     category_name: str = Field(min_length=1, max_length=120)
     description: str | None = None
+    leader_user_id: int | None = None
+    leader_title: str | None = Field(default=None, max_length=160)
+    members: list[GroupMemberCreate]
+
+
+class GroupUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    category_name: str = Field(min_length=1, max_length=120)
+    description: str | None = None
+    leader_user_id: int | None = None
+    leader_title: str | None = Field(default=None, max_length=160)
     members: list[GroupMemberCreate]
 
 
@@ -53,6 +64,9 @@ class GroupResponse(BaseModel):
     name: str
     category_name: str
     description: str | None
+    leader_user_id: int | None
+    leader_name: str | None
+    leader_title: str | None
     created_by: int | None
     created_at: datetime
     members: list[GroupMemberResponse]

@@ -1,5 +1,6 @@
 import os
 
+from sqlalchemy import inspect, text
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -34,4 +35,22 @@ def create_all_tables():
     import models  # noqa: F401 - imports all models so Base knows about them
 
     Base.metadata.create_all(bind=engine)
+    _ensure_group_columns()
     print("Database tables verified / created.")
+
+
+def _ensure_group_columns():
+    inspector = inspect(engine)
+    if "custom_groups" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("custom_groups")}
+    statements: list[str] = []
+    if "leader_user_id" not in columns:
+        statements.append("ALTER TABLE custom_groups ADD COLUMN leader_user_id INTEGER NULL")
+    if "leader_title" not in columns:
+        statements.append("ALTER TABLE custom_groups ADD COLUMN leader_title VARCHAR(160) NULL")
+    if not statements:
+        return
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))

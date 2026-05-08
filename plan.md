@@ -324,4 +324,9 @@ Next follow-up:
 - Added live backend group APIs for options, list, create, and delete with reusable membership across users, manager teams, project teams, and departments.
 - Added a live dashboard Group tab to create custom categories, assign hierarchy, and view group-wise productivity rollups.
 
+Leader and edit follow-up:
+- Added group-level leader support with `leader_user_id` and `leader_title`.
+- Added `PUT /api/groups/{group_id}` and frontend edit mode for existing groups.
+- Group builder now supports naming a leader such as CTO, CEO, manager, department head, or senior engineer independent of the membership hierarchy.
+
 

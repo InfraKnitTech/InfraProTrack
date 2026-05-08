@@ -100,8 +100,11 @@ export default function Dashboard() {
     name: '',
     category_name: '',
     description: '',
+    leader_user_id: '',
+    leader_title: '',
     members: [createGroupMemberDraft()],
   });
+  const [editingGroupId, setEditingGroupId] = useState(null);
   const [rules, setRules] = useState([]);
   const [rulesLoading, setRulesLoading] = useState(false);
   const [ruleForm, setRuleForm] = useState({
@@ -334,6 +337,8 @@ export default function Dashboard() {
         name: groupForm.name,
         category_name: groupForm.category_name,
         description: groupForm.description,
+        leader_user_id: groupForm.leader_user_id ? Number(groupForm.leader_user_id) : null,
+        leader_title: groupForm.leader_title || null,
         members: groupForm.members.map((member, index) => ({
           client_key: member.client_key,
           parent_client_key: member.parent_client_key || null,
@@ -346,13 +351,12 @@ export default function Dashboard() {
           sort_order: index,
         })),
       };
-      await axios.post(`${API_BASE}/api/groups`, payload, { headers });
-      setGroupForm({
-        name: '',
-        category_name: '',
-        description: '',
-        members: [createGroupMemberDraft()],
-      });
+      if (editingGroupId) {
+        await axios.put(`${API_BASE}/api/groups/${editingGroupId}`, payload, { headers });
+      } else {
+        await axios.post(`${API_BASE}/api/groups`, payload, { headers });
+      }
+      resetGroupForm();
       fetchGroups();
     } catch (err) {
       console.error('Failed to create group', err);
@@ -369,6 +373,39 @@ export default function Dashboard() {
     } catch (err) {
       console.error('Failed to delete group', err);
     }
+  };
+
+  const startEditGroup = (group) => {
+    const keyById = new Map(group.members.map((member, index) => [member.id, `existing-${group.id}-${member.id}-${index}`]));
+    setEditingGroupId(group.id);
+    setGroupForm({
+      name: group.name,
+      category_name: group.category_name,
+      description: group.description || '',
+      leader_user_id: group.leader_user_id || '',
+      leader_title: group.leader_title || '',
+      members: group.members.map((member, index) => ({
+        client_key: keyById.get(member.id),
+        parent_client_key: member.parent_member_id ? (keyById.get(member.parent_member_id) || '') : '',
+        member_type: member.member_type,
+        ref_id: member.user_id || member.manager_user_id || member.project_id || '',
+        department_name: member.department_name || '',
+        label_override: member.label_override || '',
+      })),
+    });
+    setActiveTab('groups');
+  };
+
+  const resetGroupForm = () => {
+    setEditingGroupId(null);
+    setGroupForm({
+      name: '',
+      category_name: '',
+      description: '',
+      leader_user_id: '',
+      leader_title: '',
+      members: [createGroupMemberDraft()],
+    });
   };
 
   const nav = [
@@ -626,6 +663,19 @@ export default function Dashboard() {
                       <span>Description</span>
                       <input className="input-field" name="description" value={groupForm.description} onChange={handleGroupFormChange} placeholder="Optional note about why this group exists" />
                     </label>
+                    <label>
+                      <span>Leader</span>
+                      <select className="input-field" name="leader_user_id" value={groupForm.leader_user_id} onChange={handleGroupFormChange}>
+                        <option value="">No leader assigned</option>
+                        {groupOptions.users.map((option) => (
+                          <option key={option.id} value={option.ref_id}>{option.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Leader title</span>
+                      <input className="input-field" name="leader_title" value={groupForm.leader_title} onChange={handleGroupFormChange} placeholder="CTO, CEO, Senior Engineer, Team Lead" />
+                    </label>
                   </div>
 
                   <div className="group-member-stack">
@@ -691,9 +741,14 @@ export default function Dashboard() {
                       <Plus size={16} />
                       Add member
                     </button>
+                    {editingGroupId && (
+                      <button type="button" className="btn btn-secondary" onClick={resetGroupForm}>
+                        Cancel edit
+                      </button>
+                    )}
                     <button type="submit" className="btn btn-primary">
                       <Plus size={16} />
-                      Create group
+                      {editingGroupId ? 'Save group' : 'Create group'}
                     </button>
                   </div>
                 </form>
@@ -703,19 +758,25 @@ export default function Dashboard() {
             <div className="panel full">
               <PanelHeader icon={BarChart3} title="Group Rollups" action="Live group-wise data" />
               <DataTable
-                columns={['Category', 'Group', 'Employees', 'Productive', 'Active', 'Idle', 'Productivity %', 'Members', 'Action']}
+                columns={['Category', 'Group', 'Leader', 'Employees', 'Productive', 'Active', 'Idle', 'Productivity %', 'Members', 'Actions']}
                 rows={groups.map((group) => [
                   group.category_name,
                   group.name,
+                  group.leader_name ? `${group.leader_name}${group.leader_title ? ` (${group.leader_title})` : ''}` : '-',
                   group.summary.employee_count,
                   secondsToHours(group.summary.productive_seconds),
                   secondsToHours(group.summary.active_seconds),
                   secondsToHours(group.summary.idle_seconds),
                   <span className={`score ${scoreTone(Math.round(group.summary.productivity_percent))}`}>{Math.round(group.summary.productivity_percent)}</span>,
                   group.members.length,
-                  <button className="table-action danger" onClick={() => deleteGroup(group.id)} aria-label={`Delete group ${group.name}`}>
-                    <Trash2 size={15} />
-                  </button>,
+                  <div className="table-action-row">
+                    <button className="table-action" onClick={() => startEditGroup(group)} aria-label={`Edit group ${group.name}`}>
+                      Edit
+                    </button>
+                    <button className="table-action danger" onClick={() => deleteGroup(group.id)} aria-label={`Delete group ${group.name}`}>
+                      <Trash2 size={15} />
+                    </button>
+                  </div>,
                 ])}
                 emptyMessage={groupsLoading ? 'Loading live group data...' : 'No custom groups created yet.'}
               />
@@ -733,6 +794,7 @@ export default function Dashboard() {
                           <small>{group.category_name}</small>
                         </div>
                         <div className="group-chip-row">
+                          {group.leader_name && <span className="status-pill">{group.leader_name}{group.leader_title ? ` - ${group.leader_title}` : ''}</span>}
                           <span className="status-pill">{group.summary.employee_count} employees</span>
                           <span className={`score ${scoreTone(Math.round(group.summary.productivity_percent))}`}>{Math.round(group.summary.productivity_percent)}%</span>
                         </div>

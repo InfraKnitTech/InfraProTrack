@@ -16,6 +16,7 @@ from schemas.groups import (
     GroupOptionsResponse,
     GroupResponse,
     GroupSummaryResponse,
+    GroupUpdate,
 )
 
 router = APIRouter(prefix="/api/groups", tags=["Groups"])
@@ -68,33 +69,44 @@ def create_group(
         name=payload.name.strip(),
         category_name=payload.category_name.strip(),
         description=(payload.description or "").strip() or None,
+        leader_user_id=_validated_leader_id(db, current_user, payload.leader_user_id),
+        leader_title=(payload.leader_title or "").strip() or None,
         created_by=current_user.id,
     )
     db.add(group)
     db.flush()
 
-    created: dict[str, CustomGroupMember] = {}
-    pending_parents: list[tuple[CustomGroupMember, str]] = []
-    for item in payload.members:
-        member = _build_member(db, current_user, group.id, item)
-        db.add(member)
-        db.flush()
-        created[item.client_key] = member
-        if item.parent_client_key:
-            pending_parents.append((member, item.parent_client_key))
-
-    for member, parent_key in pending_parents:
-        parent = created.get(parent_key)
-        if parent is None:
-            raise HTTPException(status_code=400, detail=f"Unknown parent member key: {parent_key}")
-        member.parent_member_id = parent.id
+    _replace_group_members(db, current_user, group, payload.members)
 
     db.commit()
-    stored = db.query(CustomGroup).options(
-        joinedload(CustomGroup.members).joinedload(CustomGroupMember.user),
-        joinedload(CustomGroup.members).joinedload(CustomGroupMember.manager_user),
-        joinedload(CustomGroup.members).joinedload(CustomGroupMember.project),
-    ).filter(CustomGroup.id == group.id).first()
+    stored = _load_group(db, group.id)
+    return _to_group_response(db, current_user, stored)
+
+
+@router.put("/{group_id}", response_model=GroupResponse, summary="Update a custom group")
+def update_group(
+    group_id: int,
+    payload: GroupUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "manager")),
+):
+    group = db.query(CustomGroup).filter(CustomGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    if not _can_view_group(current_user, group):
+        raise HTTPException(status_code=403, detail="Not allowed to update this group")
+    if not payload.members:
+        raise HTTPException(status_code=400, detail="At least one member is required")
+
+    group.name = payload.name.strip()
+    group.category_name = payload.category_name.strip()
+    group.description = (payload.description or "").strip() or None
+    group.leader_user_id = _validated_leader_id(db, current_user, payload.leader_user_id)
+    group.leader_title = (payload.leader_title or "").strip() or None
+
+    _replace_group_members(db, current_user, group, payload.members)
+    db.commit()
+    stored = _load_group(db, group.id)
     return _to_group_response(db, current_user, stored)
 
 
@@ -145,9 +157,48 @@ def _build_member(db: Session, current_user: User, group_id: int, item) -> Custo
     return member
 
 
+def _replace_group_members(db: Session, current_user: User, group: CustomGroup, members_payload: list) -> None:
+    db.query(CustomGroupMember).filter(CustomGroupMember.group_id == group.id).delete()
+    db.flush()
+
+    created: dict[str, CustomGroupMember] = {}
+    pending_parents: list[tuple[CustomGroupMember, str]] = []
+    for item in members_payload:
+        member = _build_member(db, current_user, group.id, item)
+        db.add(member)
+        db.flush()
+        created[item.client_key] = member
+        if item.parent_client_key:
+            pending_parents.append((member, item.parent_client_key))
+
+    for member, parent_key in pending_parents:
+        parent = created.get(parent_key)
+        if parent is None:
+            raise HTTPException(status_code=400, detail=f"Unknown parent member key: {parent_key}")
+        member.parent_member_id = parent.id
+
+
+def _validated_leader_id(db: Session, current_user: User, leader_user_id: int | None) -> int | None:
+    if leader_user_id is None:
+        return None
+    leader = db.query(User).filter(User.id == leader_user_id, User.is_active.is_(True)).first()
+    if not leader or not _can_view_user(current_user, leader):
+        raise HTTPException(status_code=400, detail="Invalid leader user")
+    return leader.id
+
+
+def _load_group(db: Session, group_id: int) -> CustomGroup | None:
+    return db.query(CustomGroup).options(
+        joinedload(CustomGroup.members).joinedload(CustomGroupMember.user),
+        joinedload(CustomGroup.members).joinedload(CustomGroupMember.manager_user),
+        joinedload(CustomGroup.members).joinedload(CustomGroupMember.project),
+    ).filter(CustomGroup.id == group_id).first()
+
+
 def _to_group_response(db: Session, current_user: User, group: CustomGroup) -> GroupResponse:
     employee_counts = _member_employee_counts(db, current_user, group.members)
     child_counts = defaultdict(int)
+    leader = db.query(User).filter(User.id == group.leader_user_id).first() if group.leader_user_id else None
     for member in group.members:
         if member.parent_member_id:
             child_counts[member.parent_member_id] += 1
@@ -156,6 +207,9 @@ def _to_group_response(db: Session, current_user: User, group: CustomGroup) -> G
         name=group.name,
         category_name=group.category_name,
         description=group.description,
+        leader_user_id=group.leader_user_id,
+        leader_name=(leader.full_name or leader.username) if leader else None,
+        leader_title=group.leader_title,
         created_by=group.created_by,
         created_at=group.created_at,
         members=[
