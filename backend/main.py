@@ -3,13 +3,15 @@ InfraProTrack - Employee Productivity Monitoring System
 FastAPI Backend | Docs: /docs  ReDoc: /redoc
 """
 from contextlib import asynccontextmanager
+from fastapi import Request
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from sqlalchemy.exc import SQLAlchemyError
 import uvicorn
 
 from core.config import server
-from database import create_all_tables
+from database import create_all_tables, reset_connection_pool
 from routers import agents, analytics, auth, dashboard, employees, groups, reports, rules, shifts, telemetry
 
 
@@ -59,6 +61,18 @@ app.include_router(rules.router)
 app.include_router(groups.router)
 app.include_router(shifts.router)
 app.include_router(employees.router)
+
+
+@app.exception_handler(SQLAlchemyError)
+async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
+    reset_connection_pool()
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Database connection unavailable. Check MySQL service and retry.",
+            "path": request.url.path,
+        },
+    )
 
 
 @app.get("/", tags=["Health"])

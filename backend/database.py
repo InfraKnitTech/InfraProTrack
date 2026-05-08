@@ -19,12 +19,24 @@ if DATABASE_URL.startswith("sqlite"):
 else:
     engine_kwargs["pool_size"] = mysql.POOL_MAX
     engine_kwargs["max_overflow"] = 5
+    engine_kwargs["pool_recycle"] = 1200
+    engine_kwargs["pool_timeout"] = 10
+    engine_kwargs["connect_args"] = {
+        "connect_timeout": 10,
+        "read_timeout": 30,
+        "write_timeout": 30,
+    }
 
 engine = create_engine(DATABASE_URL, **engine_kwargs)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
+
+
+def reset_connection_pool():
+    """Drop pooled DB connections after a network-level DB failure."""
+    engine.dispose()
 
 
 def create_all_tables():
