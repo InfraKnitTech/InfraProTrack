@@ -86,7 +86,6 @@ function blankEmployeeForm() {
     username: '',
     full_name: '',
     email: '',
-    password: '',
     employee_code: '',
     department: '',
     phone: '',
@@ -118,7 +117,6 @@ function employeeFormFromRecord(employee) {
     username: employee.username || '',
     full_name: employee.full_name || '',
     email: employee.email || '',
-    password: '',
     employee_code: employee.employee_code || '',
     department: employee.department || '',
     phone: employee.phone || '',
@@ -187,11 +185,13 @@ export default function Dashboard() {
     name: '',
     category_name: '',
     description: '',
+    parent_group_id: '',
     leader_user_id: '',
     leader_title: '',
     members: [createGroupMemberDraft()],
   });
   const [editingGroupId, setEditingGroupId] = useState(null);
+  const [expandedGroupIds, setExpandedGroupIds] = useState([]);
   const [rules, setRules] = useState([]);
   const [rulesLoading, setRulesLoading] = useState(false);
   const [ruleForm, setRuleForm] = useState({
@@ -212,12 +212,16 @@ export default function Dashboard() {
   }, []);
 
   const departmentOptions = useMemo(() => (
-    [...new Set(employees.map((employee) => employee.department).filter(Boolean))].sort()
-  ), [employees]);
+    (groupOptions.departments || []).map((option) => option.label).filter(Boolean)
+  ), [groupOptions.departments]);
 
   const designationOptions = useMemo(() => (
     [...new Set(employees.map((employee) => employee.designation).filter(Boolean))].sort()
   ), [employees]);
+
+  const editableParentGroups = useMemo(() => (
+    groups.filter((group) => group.id !== editingGroupId)
+  ), [groups, editingGroupId]);
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
@@ -496,6 +500,14 @@ export default function Dashboard() {
     setGroupForm((current) => ({ ...current, [name]: value }));
   };
 
+  const toggleGroupCard = (groupId) => {
+    setExpandedGroupIds((current) => (
+      current.includes(groupId)
+        ? current.filter((id) => id !== groupId)
+        : [...current, groupId]
+    ));
+  };
+
   const handleGroupMemberChange = (clientKey, field, value) => {
     setGroupForm((current) => ({
       ...current,
@@ -549,6 +561,7 @@ export default function Dashboard() {
         name: groupForm.name,
         category_name: groupForm.category_name,
         description: groupForm.description,
+        parent_group_id: groupForm.parent_group_id ? Number(groupForm.parent_group_id) : null,
         leader_user_id: groupForm.leader_user_id ? Number(groupForm.leader_user_id) : null,
         leader_title: groupForm.leader_title || null,
         members: groupForm.members.map((member, index) => ({
@@ -603,6 +616,7 @@ export default function Dashboard() {
       name: group.name,
       category_name: group.category_name,
       description: group.description || '',
+      parent_group_id: group.parent_group_id || '',
       leader_user_id: group.leader_user_id || '',
       leader_title: group.leader_title || '',
       members: group.members.map((member, index) => ({
@@ -623,6 +637,7 @@ export default function Dashboard() {
       name: '',
       category_name: '',
       description: '',
+      parent_group_id: '',
       leader_user_id: '',
       leader_title: '',
       members: [createGroupMemberDraft()],
@@ -680,12 +695,15 @@ export default function Dashboard() {
       if (!headers) {
         return;
       }
+      if (employeeForm.department && !departmentOptions.includes(employeeForm.department)) {
+        alert('Select a department from the Groups tab before saving the employee.');
+        return;
+      }
       const payload = {
         ...employeeForm,
         manager_id: employeeForm.manager_id ? Number(employeeForm.manager_id) : null,
         project_id: employeeForm.project_id ? Number(employeeForm.project_id) : null,
         shift_id: employeeForm.shift_id ? Number(employeeForm.shift_id) : null,
-        password: employeeForm.password || null,
         assets: employeeForm.assets.filter((asset) => asset.asset_name.trim()),
         schedule: employeeForm.schedule,
         agent_id: employeeForm.agent_id ? Number(employeeForm.agent_id) : null,
@@ -728,7 +746,6 @@ export default function Dashboard() {
       username: agent.suggested_username || '',
       full_name: agent.suggested_full_name || agent.hostname || '',
       email: agent.suggested_email || '',
-      employee_code: agent.suggested_employee_code || '',
     });
     setEmployeeSubTab('form');
   };
@@ -1075,6 +1092,17 @@ export default function Dashboard() {
                       <input className="input-field" name="description" value={groupForm.description} onChange={handleGroupFormChange} placeholder="Optional note about why this group exists" />
                     </label>
                     <label>
+                      <span>Parent group</span>
+                      <select className="input-field" name="parent_group_id" value={groupForm.parent_group_id} onChange={handleGroupFormChange}>
+                        <option value="">Root group</option>
+                        {editableParentGroups.map((group) => (
+                          <option key={group.id} value={group.id}>
+                            {group.name} ({group.category_name})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
                       <span>Leader</span>
                       <select className="input-field" name="leader_user_id" value={groupForm.leader_user_id} onChange={handleGroupFormChange}>
                         <option value="">No leader assigned</option>
@@ -1169,8 +1197,9 @@ export default function Dashboard() {
             <div className="panel full">
               <PanelHeader icon={BarChart3} title="Group Rollups" action="Live group-wise data" />
               <DataTable
-                columns={['Category', 'Group', 'Leader', 'Employees', 'Productive', 'Active', 'Idle', 'Productivity %', 'Members', 'Actions']}
+                columns={['Parent', 'Category', 'Group', 'Leader', 'Employees', 'Productive', 'Active', 'Idle', 'Productivity %', 'Members', 'Actions']}
                 rows={groups.map((group) => [
+                  group.parent_group_name || 'Root',
                   group.category_name,
                   group.name,
                   group.leader_name ? `${group.leader_name}${group.leader_title ? ` (${group.leader_title})` : ''}` : '-',
@@ -1194,7 +1223,16 @@ export default function Dashboard() {
             </div>
 
             <div className="panel full">
-              <PanelHeader icon={Users} title="Group Hierarchies" action="Users can repeat across groups" />
+              <PanelHeader icon={Users} title="All Group Hierarchy" action="Root groups and nested children" />
+              {groups.length ? (
+                <div className="group-tree">
+                  <AllGroupHierarchy groups={groups} />
+                </div>
+              ) : <EmptyState message="No group hierarchy exists yet." />}
+            </div>
+
+            <div className="panel full">
+              <PanelHeader icon={Users} title="Group Hierarchies" action="Click a group to inspect its members" />
               {groups.length ? (
                 <div className="group-cards">
                   {groups.map((group) => (
@@ -1204,14 +1242,24 @@ export default function Dashboard() {
                           <strong>{group.name}</strong>
                           <small>{group.category_name}</small>
                         </div>
-                        <div className="group-chip-row">
-                          {group.leader_name && <span className="status-pill">{group.leader_name}{group.leader_title ? ` - ${group.leader_title}` : ''}</span>}
-                          <span className="status-pill">{group.summary.employee_count} employees</span>
-                          <span className={`score ${scoreTone(Math.round(group.summary.productivity_percent))}`}>{Math.round(group.summary.productivity_percent)}%</span>
+                        <div className="group-card-head-actions">
+                          <div className="group-chip-row">
+                            {group.parent_group_name && <span className="status-pill">Parent: {group.parent_group_name}</span>}
+                            {group.leader_name && <span className="status-pill">{group.leader_name}{group.leader_title ? ` - ${group.leader_title}` : ''}</span>}
+                            <span className="status-pill">{group.summary.employee_count} people</span>
+                            <span className={`score ${scoreTone(Math.round(group.summary.productivity_percent))}`}>{Math.round(group.summary.productivity_percent)}%</span>
+                          </div>
+                          <button className="btn btn-secondary" onClick={() => toggleGroupCard(group.id)}>
+                            {expandedGroupIds.includes(group.id) ? 'Close' : 'Open'}
+                          </button>
                         </div>
                       </div>
-                      {group.description && <p>{group.description}</p>}
-                      <GroupHierarchy members={group.members} />
+                      {expandedGroupIds.includes(group.id) && (
+                        <>
+                          {group.description && <p>{group.description}</p>}
+                          <GroupHierarchy members={group.members} />
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1359,9 +1407,19 @@ export default function Dashboard() {
                       <label><span>Full name</span><input className="input-field" name="full_name" value={employeeForm.full_name} onChange={handleEmployeeChange} required /></label>
                       <label><span>Username</span><input className="input-field" name="username" value={employeeForm.username} onChange={handleEmployeeChange} required /></label>
                       <label><span>Email</span><input className="input-field" type="email" name="email" value={employeeForm.email} onChange={handleEmployeeChange} required /></label>
-                      <label><span>Password</span><input className="input-field" type="password" name="password" value={employeeForm.password} onChange={handleEmployeeChange} placeholder={editingEmployeeId ? 'Leave unchanged' : 'Default: Employee@123'} /></label>
                       <label><span>Employee code</span><input className="input-field" name="employee_code" value={employeeForm.employee_code} onChange={handleEmployeeChange} /></label>
-                      <label><span>Department / Team</span><input className="input-field" name="department" value={employeeForm.department} onChange={handleEmployeeChange} placeholder="Delivery, Support, Engineering" /></label>
+                      <label>
+                        <span>Department / Team</span>
+                        <input
+                          className="input-field"
+                          name="department"
+                          list="employee-department-options"
+                          value={employeeForm.department}
+                          onChange={handleEmployeeChange}
+                          placeholder="Search a group from Groups tab"
+                        />
+                        <small className="field-hint">Choose from an existing group, department, team, or category.</small>
+                      </label>
                       <label><span>Designation</span><input className="input-field" name="designation" value={employeeForm.designation} onChange={handleEmployeeChange} placeholder="Senior Engineer" /></label>
                       <label><span>Status</span>
                         <select className="input-field" name="employment_status" value={employeeForm.employment_status} onChange={handleEmployeeChange}>
@@ -1433,6 +1491,11 @@ export default function Dashboard() {
                       <button className="btn btn-primary" type="submit">{editingEmployeeId ? 'Save employee' : 'Create employee'}</button>
                     </div>
                   </form>
+                  <datalist id="employee-department-options">
+                    {departmentOptions.map((department) => (
+                      <option key={department} value={department} />
+                    ))}
+                  </datalist>
                 </>
               )}
 
@@ -1738,6 +1801,36 @@ function GroupHierarchy({ members }) {
           <span className="status-pill">{member.employee_count} people</span>
         </div>
         {renderBranch(member.id, depth + 1)}
+      </div>
+    ));
+  };
+
+  return <div className="group-tree">{renderBranch()}</div>;
+}
+
+function AllGroupHierarchy({ groups }) {
+  const tree = useMemo(() => {
+    const byParent = new Map();
+    groups.forEach((group) => {
+      const parentKey = group.parent_group_id || 0;
+      const bucket = byParent.get(parentKey) || [];
+      bucket.push(group);
+      byParent.set(parentKey, bucket);
+    });
+    return byParent;
+  }, [groups]);
+
+  const renderBranch = (parentId = 0, depth = 0) => {
+    const branch = tree.get(parentId) || [];
+    return branch.map((group) => (
+      <div className="group-tree-node" key={group.id} style={{ marginLeft: `${depth * 18}px` }}>
+        <div className="group-tree-row">
+          <strong>{group.name}</strong>
+          <small>{group.category_name}</small>
+          <span className="status-pill">{group.summary.employee_count} people</span>
+          {group.leader_name && <span className="status-pill">{group.leader_name}</span>}
+        </div>
+        {renderBranch(group.id, depth + 1)}
       </div>
     ));
   };

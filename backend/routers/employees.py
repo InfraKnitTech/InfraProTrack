@@ -79,6 +79,7 @@ def create_employee(
         designation=_clean(payload.designation),
         employment_status=payload.employment_status,
         is_active=payload.employment_status == "working",
+        is_monitoring_subject=True,
         manager_id=payload.manager_id,
         project_id=payload.project_id,
         shift_id=payload.shift_id,
@@ -256,7 +257,7 @@ def _employee_query(db: Session):
         joinedload(User.shift),
         joinedload(User.created_by),
         joinedload(User.history).joinedload(EmployeeHistory.changed_by),
-    ).filter(User.role == "employee")
+    ).filter(User.is_monitoring_subject.is_(True))
 
 
 def _load_employee(db: Session, employee_id: int) -> User | None:
@@ -353,7 +354,11 @@ def _validate_unique_employee(
 
 
 def _validate_refs(db: Session, current_user: User, manager_id: int | None, project_id: int | None, shift_id: int | None) -> None:
-    if manager_id and not db.query(User).filter(User.id == manager_id, User.is_active.is_(True)).first():
+    if manager_id and not db.query(User).filter(
+        User.id == manager_id,
+        User.is_active.is_(True),
+        User.is_monitoring_subject.is_(True),
+    ).first():
         raise HTTPException(status_code=400, detail="Manager/leader employee not found")
     if project_id:
         project = db.query(Project).filter(Project.id == project_id).first()

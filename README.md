@@ -31,6 +31,7 @@ Current working stack:
 - Live rule management APIs are available at `GET/POST /api/rules` and `PUT/DELETE /api/rules/{rule_id}`.
 - Custom group APIs are available at `GET /api/groups`, `POST /api/groups`, `PUT /api/groups/{group_id}`, `DELETE /api/groups/{group_id}`, and `GET /api/groups/options`.
 - Employee management APIs are available at `GET/POST /api/employees`, `GET/PUT/DELETE /api/employees/{employee_id}`, `GET /api/employees/pending-agents`, `GET /api/employees/{employee_id}/insights`, and `GET /api/employees/{employee_id}/history`.
+- Dashboard login users are separated from monitored organization employees through `users.is_monitoring_subject`; admin/manager login accounts are not included in employee totals unless a separate monitored employee profile is created and linked to an agent.
 - Shift block APIs are available at `GET/POST /api/shifts` and `PUT/DELETE /api/shifts/{shift_id}`.
 - Seed data verifies baseline admin, manager, shifts, project, manager profile, and productivity rules. Demo employees are no longer seeded.
 - Login now returns a JWT directly from `POST /api/auth/login`.

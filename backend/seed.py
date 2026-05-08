@@ -26,6 +26,7 @@ def seed():
                 password=get_password_hash("pass123"),
                 role="admin",
                 department="Operations",
+                is_monitoring_subject=False,
             )
             db.add(admin)
             db.flush()
@@ -33,6 +34,7 @@ def seed():
         else:
             admin.username = "admin"
             admin.password = get_password_hash("pass123")
+            admin.is_monitoring_subject = False
             print("Admin user already exists.")
 
         day_shift = _ensure_shift(db, "India Day Shift", time(9, 30), time(18, 30), "Asia/Kolkata")
@@ -118,6 +120,7 @@ def _ensure_user(db, username, full_name, email, password, role, department, **k
         password=get_password_hash(password),
         role=role,
         department=department,
+        is_monitoring_subject=False,
         **kwargs,
     )
     db.add(user)

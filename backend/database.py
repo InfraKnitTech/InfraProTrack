@@ -63,6 +63,8 @@ def _ensure_group_columns():
         statements.append("ALTER TABLE custom_groups ADD COLUMN leader_user_id INTEGER NULL")
     if "leader_title" not in columns:
         statements.append("ALTER TABLE custom_groups ADD COLUMN leader_title VARCHAR(160) NULL")
+    if "parent_group_id" not in columns:
+        statements.append("ALTER TABLE custom_groups ADD COLUMN parent_group_id INTEGER NULL")
     if not statements:
         return
     with engine.begin() as connection:
@@ -82,6 +84,7 @@ def _ensure_employee_columns():
         "designation": "VARCHAR(160) NULL",
         "employment_status": "VARCHAR(40) NOT NULL DEFAULT 'working'",
         "created_by_id": "INTEGER NULL",
+        "is_monitoring_subject": "BOOLEAN NOT NULL DEFAULT FALSE",
     }
     for column_name, definition in additions.items():
         if column_name not in columns:

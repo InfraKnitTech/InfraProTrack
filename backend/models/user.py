@@ -22,6 +22,7 @@ class User(Base):
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     timezone = Column(String(64), default="Asia/Kolkata")
     is_active = Column(Boolean, default=True, nullable=False)
+    is_monitoring_subject = Column(Boolean, default=False, nullable=False)
     last_login_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

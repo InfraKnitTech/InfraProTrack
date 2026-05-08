@@ -34,6 +34,9 @@ def productivity_summary(
         joinedload(ActivityLog.user).joinedload(User.project),
         joinedload(ActivityLog.user).joinedload(User.shift),
         joinedload(ActivityLog.user).joinedload(User.manager),
+    ).join(User, ActivityLog.user_id == User.id).filter(
+        User.is_monitoring_subject.is_(True),
+        User.is_active.is_(True),
     )
 
     if start_at:
@@ -87,6 +90,8 @@ def _date_range(start_date: date | None, end_date: date | None) -> tuple[datetim
 
 
 def _can_view_user(current_user: User, target: User) -> bool:
+    if not target.is_monitoring_subject or not target.is_active:
+        return False
     if current_user.role == "admin":
         return True
     if current_user.role == "manager":

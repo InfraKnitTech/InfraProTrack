@@ -13,11 +13,24 @@ class CustomGroup(Base):
     name = Column(String(160), nullable=False)
     category_name = Column(String(120), nullable=False, index=True)
     description = Column(Text, nullable=True)
+    parent_group_id = Column(Integer, ForeignKey("custom_groups.id"), nullable=True, index=True)
     leader_user_id = Column(Integer, nullable=True, index=True)
     leader_title = Column(String(160), nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    parent_group = relationship(
+        "CustomGroup",
+        remote_side=[id],
+        back_populates="child_groups",
+        foreign_keys=[parent_group_id],
+    )
+    child_groups = relationship(
+        "CustomGroup",
+        back_populates="parent_group",
+        cascade="all, delete-orphan",
+        single_parent=True,
+    )
     members = relationship(
         "CustomGroupMember",
         back_populates="group",

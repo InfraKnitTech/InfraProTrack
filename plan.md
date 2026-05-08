@@ -349,5 +349,6 @@ Employee UI follow-up:
 - Shift timings, employee edit, details, insights, and history now open as in-page panels from directory actions.
 - Employees tab now includes a pending employee confirmation list for registered agents and a sticky top navigation bar for long dashboard pages.
 - Demo employee seed rows were removed; the live database employee list was cleaned for testing.
+- Dashboard login users are now separated from monitored employee profiles, so admin/monitoring-team accounts do not inflate employee totals.
 
 

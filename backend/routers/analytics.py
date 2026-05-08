@@ -122,6 +122,8 @@ def _date_range(start_date: date | None, end_date: date | None) -> tuple[datetim
 def _can_view_user(current_user: User, target: User | None) -> bool:
     if target is None:
         return False
+    if not target.is_monitoring_subject or not target.is_active:
+        return False
     if current_user.role == "admin":
         return True
     if current_user.role == "manager":
@@ -258,9 +260,10 @@ def _agent_group_name(agent: AgentDevice | None) -> str:
 
 
 def _visible_user_for_agent(db: Session, agent: AgentDevice | None, payload: dict) -> User | None:
-    if agent is None:
+    if agent is None or not agent.user_id:
         return None
-    username = str(payload.get("username") or agent.username or "").strip()
-    if not username:
-        return None
-    return db.query(User).filter(User.username == username).first()
+    return db.query(User).filter(
+        User.id == agent.user_id,
+        User.is_monitoring_subject.is_(True),
+        User.is_active.is_(True),
+    ).first()

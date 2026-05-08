@@ -49,6 +49,7 @@ def list_groups(
     current_user: User = Depends(require_role("admin", "manager")),
 ):
     groups = db.query(CustomGroup).options(
+        joinedload(CustomGroup.parent_group),
         joinedload(CustomGroup.members).joinedload(CustomGroupMember.user),
         joinedload(CustomGroup.members).joinedload(CustomGroupMember.manager_user),
         joinedload(CustomGroup.members).joinedload(CustomGroupMember.project),
@@ -69,6 +70,7 @@ def create_group(
         name=payload.name.strip(),
         category_name=payload.category_name.strip(),
         description=(payload.description or "").strip() or None,
+        parent_group_id=_validated_parent_group_id(db, current_user, payload.parent_group_id),
         leader_user_id=_validated_leader_id(db, current_user, payload.leader_user_id),
         leader_title=(payload.leader_title or "").strip() or None,
         created_by=current_user.id,
@@ -101,6 +103,7 @@ def update_group(
     group.name = payload.name.strip()
     group.category_name = payload.category_name.strip()
     group.description = (payload.description or "").strip() or None
+    group.parent_group_id = _validated_parent_group_id(db, current_user, payload.parent_group_id, group.id)
     group.leader_user_id = _validated_leader_id(db, current_user, payload.leader_user_id)
     group.leader_title = (payload.leader_title or "").strip() or None
 
@@ -133,12 +136,20 @@ def _build_member(db: Session, current_user: User, group_id: int, item) -> Custo
         sort_order=item.sort_order,
     )
     if item.member_type == "user":
-        user = db.query(User).filter(User.id == item.user_id, User.is_active.is_(True)).first()
+        user = db.query(User).filter(
+            User.id == item.user_id,
+            User.is_active.is_(True),
+            User.is_monitoring_subject.is_(True),
+        ).first()
         if not user or not _can_view_user(current_user, user):
             raise HTTPException(status_code=400, detail="Invalid user member")
         member.user_id = user.id
     elif item.member_type == "manager":
-        manager_user = db.query(User).filter(User.id == item.manager_user_id, User.role == "manager").first()
+        manager_user = db.query(User).filter(
+            User.id == item.manager_user_id,
+            User.is_active.is_(True),
+            User.is_monitoring_subject.is_(True),
+        ).first()
         if not manager_user or not _can_view_user(current_user, manager_user):
             raise HTTPException(status_code=400, detail="Invalid manager member")
         member.manager_user_id = manager_user.id
@@ -181,7 +192,11 @@ def _replace_group_members(db: Session, current_user: User, group: CustomGroup, 
 def _validated_leader_id(db: Session, current_user: User, leader_user_id: int | None) -> int | None:
     if leader_user_id is None:
         return None
-    leader = db.query(User).filter(User.id == leader_user_id, User.is_active.is_(True)).first()
+    leader = db.query(User).filter(
+        User.id == leader_user_id,
+        User.is_active.is_(True),
+        User.is_monitoring_subject.is_(True),
+    ).first()
     if not leader or not _can_view_user(current_user, leader):
         raise HTTPException(status_code=400, detail="Invalid leader user")
     return leader.id
@@ -189,6 +204,7 @@ def _validated_leader_id(db: Session, current_user: User, leader_user_id: int | 
 
 def _load_group(db: Session, group_id: int) -> CustomGroup | None:
     return db.query(CustomGroup).options(
+        joinedload(CustomGroup.parent_group),
         joinedload(CustomGroup.members).joinedload(CustomGroupMember.user),
         joinedload(CustomGroup.members).joinedload(CustomGroupMember.manager_user),
         joinedload(CustomGroup.members).joinedload(CustomGroupMember.project),
@@ -199,6 +215,9 @@ def _to_group_response(db: Session, current_user: User, group: CustomGroup) -> G
     employee_counts = _member_employee_counts(db, current_user, group.members)
     child_counts = defaultdict(int)
     leader = db.query(User).filter(User.id == group.leader_user_id).first() if group.leader_user_id else None
+    user_ids = _resolve_group_user_ids(db, current_user, group.members)
+    if leader and leader.is_active and leader.is_monitoring_subject and _can_view_user(current_user, leader):
+        user_ids.add(leader.id)
     for member in group.members:
         if member.parent_member_id:
             child_counts[member.parent_member_id] += 1
@@ -207,6 +226,8 @@ def _to_group_response(db: Session, current_user: User, group: CustomGroup) -> G
         name=group.name,
         category_name=group.category_name,
         description=group.description,
+        parent_group_id=group.parent_group_id,
+        parent_group_name=group.parent_group.name if group.parent_group else None,
         leader_user_id=group.leader_user_id,
         leader_name=(leader.full_name or leader.username) if leader else None,
         leader_title=group.leader_title,
@@ -228,7 +249,7 @@ def _to_group_response(db: Session, current_user: User, group: CustomGroup) -> G
             )
             for member in sorted(group.members, key=lambda item: (item.sort_order, item.id))
         ],
-        summary=_group_summary(db, _resolve_group_user_ids(db, current_user, group.members)),
+        summary=_group_summary(db, user_ids),
     )
 
 
@@ -271,6 +292,37 @@ def _member_employee_counts(db: Session, current_user: User, members: list[Custo
     return {member.id: len(_resolve_member_user_ids(db, current_user, member)) for member in members}
 
 
+def _validated_parent_group_id(
+    db: Session,
+    current_user: User,
+    parent_group_id: int | None,
+    group_id: int | None = None,
+) -> int | None:
+    if parent_group_id is None:
+        return None
+    parent = db.query(CustomGroup).filter(CustomGroup.id == parent_group_id).first()
+    if not parent or not _can_view_group(current_user, parent):
+        raise HTTPException(status_code=400, detail="Invalid parent group")
+    if group_id is not None and parent_group_id == group_id:
+        raise HTTPException(status_code=400, detail="A group cannot be its own parent")
+    if group_id is not None and _is_descendant_group(db, parent_group_id, group_id):
+        raise HTTPException(status_code=400, detail="Parent group cannot be a descendant of the group")
+    return parent.id
+
+
+def _is_descendant_group(db: Session, candidate_parent_id: int, group_id: int) -> bool:
+    current = db.query(CustomGroup).filter(CustomGroup.id == candidate_parent_id).first()
+    visited: set[int] = set()
+    while current and current.parent_group_id:
+        if current.parent_group_id == group_id:
+            return True
+        if current.parent_group_id in visited:
+            break
+        visited.add(current.parent_group_id)
+        current = db.query(CustomGroup).filter(CustomGroup.id == current.parent_group_id).first()
+    return False
+
+
 def _resolve_group_user_ids(db: Session, current_user: User, members: list[CustomGroupMember]) -> set[int]:
     user_ids: set[int] = set()
     for member in members:
@@ -282,13 +334,25 @@ def _resolve_member_user_ids(db: Session, current_user: User, member: CustomGrou
     if member.member_type == "user":
         return {member.user_id} if member.user_id and _can_view_user_id(db, current_user, member.user_id) else set()
     if member.member_type == "manager":
-        rows = db.query(User.id).filter(User.manager_id == member.manager_user_id, User.is_active.is_(True)).all()
+        rows = db.query(User.id).filter(
+            User.manager_id == member.manager_user_id,
+            User.is_active.is_(True),
+            User.is_monitoring_subject.is_(True),
+        ).all()
         return {row[0] for row in rows if _can_view_user_id(db, current_user, row[0])}
     if member.member_type == "project":
-        rows = db.query(User.id).filter(User.project_id == member.project_id, User.is_active.is_(True)).all()
+        rows = db.query(User.id).filter(
+            User.project_id == member.project_id,
+            User.is_active.is_(True),
+            User.is_monitoring_subject.is_(True),
+        ).all()
         return {row[0] for row in rows if _can_view_user_id(db, current_user, row[0])}
     if member.member_type == "department":
-        rows = db.query(User.id).filter(User.department == member.department_name, User.is_active.is_(True)).all()
+        rows = db.query(User.id).filter(
+            User.department == member.department_name,
+            User.is_active.is_(True),
+            User.is_monitoring_subject.is_(True),
+        ).all()
         return {row[0] for row in rows if _can_view_user_id(db, current_user, row[0])}
     return set()
 
@@ -308,12 +372,15 @@ def _member_label(member: CustomGroupMember) -> str:
 
 
 def _visible_users(db: Session, current_user: User) -> list[User]:
-    users = db.query(User).filter(User.is_active.is_(True)).order_by(User.full_name.asc(), User.username.asc()).all()
+    users = db.query(User).filter(
+        User.is_active.is_(True),
+        User.is_monitoring_subject.is_(True),
+    ).order_by(User.full_name.asc(), User.username.asc()).all()
     return [user for user in users if _can_view_user(current_user, user)]
 
 
 def _visible_managers(db: Session, current_user: User) -> list[User]:
-    return [user for user in _visible_users(db, current_user) if user.role == "manager"]
+    return _visible_users(db, current_user)
 
 
 def _visible_projects(db: Session, current_user: User) -> list[Project]:
@@ -332,6 +399,8 @@ def _can_view_group(current_user: User, group: CustomGroup) -> bool:
 
 
 def _can_view_user(current_user: User, target: User) -> bool:
+    if not target.is_monitoring_subject or not target.is_active:
+        return False
     if current_user.role == "admin":
         return True
     return target.id == current_user.id or target.manager_id == current_user.id

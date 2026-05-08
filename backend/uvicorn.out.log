@@ -20,3 +20,58 @@ INFO:     127.0.0.1:55338 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirec
 INFO:     127.0.0.1:55338 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
 INFO:     127.0.0.1:58591 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
 INFO:     127.0.0.1:58591 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:56336 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:56336 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:58500 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:58500 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:50431 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:50431 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:50794 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:50794 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:52586 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:52586 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:52588 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:52588 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:51706 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51706 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:51708 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51708 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:65190 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:65190 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:63096 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:63096 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:51830 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51830 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:51496 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51496 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:51503 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51503 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:51505 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51505 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:65061 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:65061 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:56884 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:56884 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:58500 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:58500 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:63268 - "POST /api/telemetry HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:63268 - "POST /api/telemetry/ HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:64385 - "GET /api/agents/config HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:64385 - "POST /api/agents/register HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64385 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64385 - "POST /api/agents/heartbeat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64385 - "POST /api/agents/events/batch HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51221 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51223 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51224 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51224 - "POST /api/agents/events/batch HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51239 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51240 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51240 - "POST /api/agents/heartbeat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51240 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51240 - "POST /api/agents/events/batch HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63561 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63562 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63564 - "GET /api/agents/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63564 - "POST /api/agents/events/batch HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63441 - "GET /api/agents/config HTTP/1.1" 200 OK

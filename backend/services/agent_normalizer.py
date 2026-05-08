@@ -191,7 +191,10 @@ def _normalize_url_usage(db: Session, user: User, payload: dict[str, Any], fallb
 def _resolve_user(db: Session, agent: AgentDevice, payload: dict[str, Any]) -> User | None:
     if not agent.user_id:
         return None
-    return db.query(User).filter(User.id == agent.user_id, User.role == "employee").first()
+    return db.query(User).filter(
+        User.id == agent.user_id,
+        User.is_monitoring_subject.is_(True),
+    ).first()
 
 
 def _classify_app(db: Session, app_name: str, window_title: str | None) -> str:

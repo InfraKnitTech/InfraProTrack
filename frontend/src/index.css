@@ -820,6 +820,12 @@ td {
   font-weight: 600;
 }
 
+.field-hint {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
 .employee-subsection {
   display: grid;
   gap: 0.75rem;
@@ -864,6 +870,8 @@ td {
 
 .insight-strip > div,
 .detail-grid > div {
+  min-width: 0;
+  overflow: hidden;
   border: 1px solid var(--surface-border);
   border-radius: 8px;
   background: var(--surface-alt);
@@ -880,6 +888,10 @@ td {
 .detail-grid strong {
   display: block;
   margin-top: 0.25rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
 }
 
 .status-pill.employee-left,
@@ -953,9 +965,31 @@ td {
   justify-content: space-between;
 }
 
+.group-card-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .group-member-actions span {
   color: var(--text-secondary);
   font-size: 0.8rem;
+}
+
+.group-card p {
+  margin: 0.75rem 0 0;
+}
+
+.group-tree {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.group-tree-node {
+  border-left: 1px solid color-mix(in srgb, var(--surface-border) 80%, transparent);
+  padding-left: 0.85rem;
 }
 
 .group-builder-actions {
