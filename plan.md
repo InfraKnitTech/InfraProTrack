@@ -335,4 +335,10 @@ Employee management follow-up:
 - Added employee CRUD, offboarding, insights, and shift-block CRUD APIs.
 - Rebuilt the Employees tab around live directory, add/edit employee, custom shift creation, and employee insights views.
 
+Employee lifecycle follow-up:
+- Agent registration now links to an existing employee or creates a new employee from the agent/device name.
+- Employee directory filters now support name/email, department, designation, project, shift, and status.
+- Employee history records changes to manager/leader, project, shift, department, designation, status, assets, schedule, and profile details.
+- Employees tab now exposes a History view per employee.
+
 

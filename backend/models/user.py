@@ -44,3 +44,4 @@ class User(Base):
     productivity_scores = relationship("ProductivityScore", back_populates="user", cascade="all, delete-orphan")
     assets = relationship("EmployeeAsset", back_populates="user", cascade="all, delete-orphan")
     shift_assignments = relationship("EmployeeShiftAssignment", back_populates="user", cascade="all, delete-orphan")
+    history = relationship("EmployeeHistory", back_populates="user", cascade="all, delete-orphan", foreign_keys="EmployeeHistory.user_id")

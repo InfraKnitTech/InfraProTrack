@@ -87,6 +87,17 @@ class EmployeeInsightEvent(BaseModel):
     duration: int
 
 
+class EmployeeHistoryOut(BaseModel):
+    id: int
+    change_type: str
+    field_name: str | None
+    old_value: str | None
+    new_value: str | None
+    changed_by_id: int | None
+    changed_by_name: str | None
+    created_at: datetime
+
+
 class EmployeeInsightResponse(BaseModel):
     employee: EmployeeOut
     productive_seconds: int
@@ -96,3 +107,8 @@ class EmployeeInsightResponse(BaseModel):
     productivity_percent: float
     top_apps: list[dict]
     recent_activity: list[EmployeeInsightEvent]
+    history: list[EmployeeHistoryOut]
+
+
+class EmployeeHistoryResponse(BaseModel):
+    items: list[EmployeeHistoryOut]

@@ -158,6 +158,14 @@ export default function Dashboard() {
   const [managerSummary, setManagerSummary] = useState([]);
   const [employeeSummary, setEmployeeSummary] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [employeeFilters, setEmployeeFilters] = useState({
+    name: '',
+    department: '',
+    designation: '',
+    project_id: '',
+    shift_id: '',
+    status: '',
+  });
   const [employeeSubTab, setEmployeeSubTab] = useState('directory');
   const [employeeForm, setEmployeeForm] = useState(blankEmployeeForm());
   const [editingEmployeeId, setEditingEmployeeId] = useState(null);
@@ -198,6 +206,14 @@ export default function Dashboard() {
       return {};
     }
   }, []);
+
+  const departmentOptions = useMemo(() => (
+    [...new Set(employees.map((employee) => employee.department).filter(Boolean))].sort()
+  ), [employees]);
+
+  const designationOptions = useMemo(() => (
+    [...new Set(employees.map((employee) => employee.designation).filter(Boolean))].sort()
+  ), [employees]);
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
@@ -309,8 +325,11 @@ export default function Dashboard() {
       if (!headers) {
         return;
       }
+      const params = Object.fromEntries(
+        Object.entries(employeeFilters).filter(([, value]) => value !== '')
+      );
       const [employeesRes, shiftsRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/employees`, { headers }),
+        axios.get(`${API_BASE}/api/employees`, { headers, params }),
         axios.get(`${API_BASE}/api/shifts`, { headers }),
       ]);
       setEmployees(employeesRes.data.items || []);
@@ -357,7 +376,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchEmployeeDirectory();
-  }, []);
+  }, [employeeFilters]);
 
   const decideAgent = async (requestId, action) => {
     try {
@@ -680,14 +699,14 @@ export default function Dashboard() {
     }
   };
 
-  const loadEmployeeInsight = async (employee) => {
+  const loadEmployeeInsight = async (employee, nextTab = 'insights') => {
     try {
       const headers = getAuthHeaders();
       if (!headers) {
         return;
       }
       setSelectedEmployeeInsight(employee);
-      setEmployeeSubTab('insights');
+      setEmployeeSubTab(nextTab);
       const res = await axios.get(`${API_BASE}/api/employees/${employee.id}/insights`, { headers });
       setEmployeeInsight(res.data);
     } catch (err) {
@@ -701,6 +720,11 @@ export default function Dashboard() {
   const handleShiftChange = (event) => {
     const { name, value } = event.target;
     setShiftForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleEmployeeFilterChange = (event) => {
+    const { name, value } = event.target;
+    setEmployeeFilters((current) => ({ ...current, [name]: value }));
   };
 
   const saveShift = async (event) => {
@@ -1163,36 +1187,71 @@ export default function Dashboard() {
                   <Eye size={15} />
                   Insights
                 </button>
+                <button className={employeeSubTab === 'history' ? 'active' : ''} onClick={() => setEmployeeSubTab('history')}>
+                  <CalendarDays size={15} />
+                  History
+                </button>
               </div>
 
               {employeeSubTab === 'directory' && (
-                <DataTable
-                  columns={['Employee', 'Department', 'Designation', 'Status', 'Email', 'Phone', 'Location', 'Shift', 'Created by', 'Assets', 'Actions']}
-                  rows={employees.map((employee) => [
-                    employee.full_name,
-                    employee.department || '-',
-                    employee.designation || '-',
-                    <span className={`status-pill employee-${employee.employment_status}`}>{employee.employment_status}</span>,
-                    employee.email,
-                    employee.phone || '-',
-                    employee.location || '-',
-                    employee.shift_name || '-',
-                    employee.created_by_name || '-',
-                    employee.assets?.length || 0,
-                    <div className="table-action-row">
-                      <button className="table-action" onClick={() => loadEmployeeInsight(employee)} aria-label={`View insights for ${employee.full_name}`}>
-                        <Eye size={15} />
-                      </button>
-                      <button className="table-action" onClick={() => editEmployee(employee)} aria-label={`Edit ${employee.full_name}`}>
-                        <MoreVertical size={15} />
-                      </button>
-                      <button className="table-action danger" onClick={() => offboardEmployee(employee.id)} aria-label={`Mark ${employee.full_name} as left`}>
-                        <Trash2 size={15} />
-                      </button>
-                    </div>,
-                  ])}
-                  emptyMessage="No employees created yet."
-                />
+                <>
+                  <div className="employee-filter-grid">
+                    <input className="input-field" name="name" value={employeeFilters.name} onChange={handleEmployeeFilterChange} placeholder="Search name, username, email" />
+                    <select className="input-field" name="department" value={employeeFilters.department} onChange={handleEmployeeFilterChange}>
+                      <option value="">All departments</option>
+                      {departmentOptions.map((department) => <option key={department} value={department}>{department}</option>)}
+                    </select>
+                    <select className="input-field" name="designation" value={employeeFilters.designation} onChange={handleEmployeeFilterChange}>
+                      <option value="">All designations</option>
+                      {designationOptions.map((designation) => <option key={designation} value={designation}>{designation}</option>)}
+                    </select>
+                    <select className="input-field" name="project_id" value={employeeFilters.project_id} onChange={handleEmployeeFilterChange}>
+                      <option value="">All projects</option>
+                      {groupOptions.projects.map((option) => <option key={option.id} value={option.ref_id}>{option.label}</option>)}
+                    </select>
+                    <select className="input-field" name="shift_id" value={employeeFilters.shift_id} onChange={handleEmployeeFilterChange}>
+                      <option value="">All shifts</option>
+                      {shifts.map((shift) => <option key={shift.id} value={shift.id}>{shift.name}</option>)}
+                    </select>
+                    <select className="input-field" name="status" value={employeeFilters.status} onChange={handleEmployeeFilterChange}>
+                      <option value="">All statuses</option>
+                      <option value="working">Working</option>
+                      <option value="retired">Retired</option>
+                      <option value="left">Left org</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </div>
+                  <DataTable
+                    columns={['Employee', 'Department', 'Designation', 'Status', 'Email', 'Phone', 'Location', 'Shift', 'Created by', 'Assets', 'Actions']}
+                    rows={employees.map((employee) => [
+                      employee.full_name,
+                      employee.department || '-',
+                      employee.designation || '-',
+                      <span className={`status-pill employee-${employee.employment_status}`}>{employee.employment_status}</span>,
+                      employee.email,
+                      employee.phone || '-',
+                      employee.location || '-',
+                      employee.shift_name || '-',
+                      employee.created_by_name || '-',
+                      employee.assets?.length || 0,
+                      <div className="table-action-row">
+                        <button className="table-action" onClick={() => loadEmployeeInsight(employee)} aria-label={`View insights for ${employee.full_name}`}>
+                          <Eye size={15} />
+                        </button>
+                        <button className="table-action" onClick={() => loadEmployeeInsight(employee, 'history')} aria-label={`View history for ${employee.full_name}`}>
+                          <CalendarDays size={15} />
+                        </button>
+                        <button className="table-action" onClick={() => editEmployee(employee)} aria-label={`Edit ${employee.full_name}`}>
+                          <MoreVertical size={15} />
+                        </button>
+                        <button className="table-action danger" onClick={() => offboardEmployee(employee.id)} aria-label={`Mark ${employee.full_name} as left`}>
+                          <Trash2 size={15} />
+                        </button>
+                      </div>,
+                    ])}
+                    emptyMessage="No employees found for the selected filters."
+                  />
+                </>
               )}
 
               {employeeSubTab === 'form' && (
@@ -1217,8 +1276,8 @@ export default function Dashboard() {
                     <label><span>Location</span><input className="input-field" name="location" value={employeeForm.location} onChange={handleEmployeeChange} /></label>
                     <label><span>Manager</span>
                       <select className="input-field" name="manager_id" value={employeeForm.manager_id} onChange={handleEmployeeChange}>
-                        <option value="">No manager</option>
-                        {groupOptions.managers.map((option) => <option key={option.id} value={option.ref_id}>{option.label}</option>)}
+                        <option value="">No manager / leader</option>
+                        {groupOptions.users.map((option) => <option key={option.id} value={option.ref_id}>{option.label}</option>)}
                       </select>
                     </label>
                     <label><span>Project</span>
@@ -1336,6 +1395,31 @@ export default function Dashboard() {
                     />
                   </div>
                 ) : <EmptyState message={selectedEmployeeInsight ? 'Loading employee insights...' : 'Select an employee from the directory to view insights.'} />
+              )}
+
+              {employeeSubTab === 'history' && (
+                employeeInsight ? (
+                  <div className="employee-insight">
+                    <div className="insight-strip">
+                      <div><span>Employee</span><strong>{employeeInsight.employee.full_name}</strong></div>
+                      <div><span>Department</span><strong>{employeeInsight.employee.department || '-'}</strong></div>
+                      <div><span>Designation</span><strong>{employeeInsight.employee.designation || '-'}</strong></div>
+                      <div><span>Status</span><strong>{employeeInsight.employee.employment_status}</strong></div>
+                    </div>
+                    <DataTable
+                      columns={['When', 'Change', 'Field', 'Old', 'New', 'Changed by']}
+                      rows={(employeeInsight.history || []).map((row) => [
+                        row.created_at ? new Date(row.created_at).toLocaleString() : '-',
+                        row.change_type,
+                        row.field_name || '-',
+                        row.old_value || '-',
+                        row.new_value || '-',
+                        row.changed_by_name || 'System',
+                      ])}
+                      emptyMessage="No employee history has been recorded yet."
+                    />
+                  </div>
+                ) : <EmptyState message="Select an employee from the directory to view history." />
               )}
             </div>
           </section>

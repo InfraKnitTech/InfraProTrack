@@ -37,6 +37,7 @@ def create_all_tables():
     Base.metadata.create_all(bind=engine)
     _ensure_group_columns()
     _ensure_employee_columns()
+    _ensure_agent_columns()
     print("Database tables verified / created.")
 
 
@@ -78,3 +79,14 @@ def _ensure_employee_columns():
     with engine.begin() as connection:
         for statement in statements:
             connection.execute(text(statement))
+
+
+def _ensure_agent_columns():
+    inspector = inspect(engine)
+    if "agent_devices" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("agent_devices")}
+    if "user_id" in columns:
+        return
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE agent_devices ADD COLUMN user_id INTEGER NULL"))

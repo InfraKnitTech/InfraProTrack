@@ -30,7 +30,7 @@ Current working stack:
 - Scoped Windows app usage analytics are available at `GET /api/analytics/app-usage-scope?group_by=overall|agent|employee|manager|project`.
 - Live rule management APIs are available at `GET/POST /api/rules` and `PUT/DELETE /api/rules/{rule_id}`.
 - Custom group APIs are available at `GET /api/groups`, `POST /api/groups`, `PUT /api/groups/{group_id}`, `DELETE /api/groups/{group_id}`, and `GET /api/groups/options`.
-- Employee management APIs are available at `GET/POST /api/employees`, `GET/PUT/DELETE /api/employees/{employee_id}`, and `GET /api/employees/{employee_id}/insights`.
+- Employee management APIs are available at `GET/POST /api/employees`, `GET/PUT/DELETE /api/employees/{employee_id}`, `GET /api/employees/{employee_id}/insights`, and `GET /api/employees/{employee_id}/history`.
 - Shift block APIs are available at `GET/POST /api/shifts` and `PUT/DELETE /api/shifts/{shift_id}`.
 - Seed data verifies baseline admin, manager, employees, shifts, project, manager profile, and productivity rules.
 - Login now returns a JWT directly from `POST /api/auth/login`.
@@ -48,6 +48,8 @@ Current working stack:
 - Dashboard includes overview, managers, employees, analytics, reports, and settings sections.
 - Dashboard includes a live Group tab for custom categories and hierarchy-based rollups across users, manager teams, project teams, and departments, with a designated group leader such as CTO, CEO, manager, or senior engineer.
 - Employees tab now supports employee directory, create/edit/offboard flow, assets, custom weekday shift assignment, shift-block creation, and per-employee insights.
+- Employee directory supports filters by name/email, shift, department, designation, project, and status.
+- Agent registration automatically links to an existing employee or creates an employee from the device name for later frontend configuration.
 - Notification bell shows pending agent approvals and supports approve/reject.
 - Settings now uses live backend rule data and supports creating and deleting app/domain rules.
 
@@ -190,6 +192,7 @@ Phase 2 from `plan.md` has been started and the database hardening portion is ap
 - Added live rule management APIs and wired the frontend Settings page to live rule data.
 - Added live custom-group APIs and wired the frontend Group tab to create, edit, and view reusable hierarchy-based groups with an assigned leader.
 - Added live employee management and shift-block APIs and wired the frontend Employees tab to real employee directory, add/edit/offboard, assets, custom shifts, and insights.
+- Added agent-to-employee auto-linking, employee history tracking, and filtered employee directory search.
 - Frontend compatibility with the Python backend is maintained.
 
 Remaining Phase 2 work:

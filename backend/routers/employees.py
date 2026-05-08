@@ -6,13 +6,15 @@ from sqlalchemy.orm import Session, joinedload
 from core.deps import get_db, require_role
 from core.security import get_password_hash
 from models.activity_log import ActivityLog
-from models.employee import EmployeeAsset
+from models.employee import EmployeeAsset, EmployeeHistory
 from models.project import Project
 from models.shift import EmployeeShiftAssignment, Shift
 from models.usage import AppUsage
 from models.user import User
 from schemas.employees import (
     EmployeeCreate,
+    EmployeeHistoryOut,
+    EmployeeHistoryResponse,
     EmployeeInsightEvent,
     EmployeeInsightResponse,
     EmployeeListResponse,
@@ -26,12 +28,28 @@ router = APIRouter(prefix="/api/employees", tags=["Employees"])
 @router.get("", response_model=EmployeeListResponse, summary="List organization employees")
 def list_employees(
     status_filter: str | None = Query(default=None, alias="status"),
+    name: str | None = None,
+    department: str | None = None,
+    designation: str | None = None,
+    project_id: int | None = None,
+    shift_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin", "manager")),
 ):
     query = _employee_query(db)
     if status_filter:
         query = query.filter(User.employment_status == status_filter)
+    if name:
+        like = f"%{name.strip()}%"
+        query = query.filter((User.full_name.ilike(like)) | (User.username.ilike(like)) | (User.email.ilike(like)))
+    if department:
+        query = query.filter(User.department == department)
+    if designation:
+        query = query.filter(User.designation == designation)
+    if project_id:
+        query = query.filter(User.project_id == project_id)
+    if shift_id:
+        query = query.filter(User.shift_id == shift_id)
     rows = [user for user in query.order_by(User.full_name.asc(), User.username.asc()).all() if _can_view_employee(current_user, user)]
     return EmployeeListResponse(items=[_employee_out(user) for user in rows])
 
@@ -66,6 +84,7 @@ def create_employee(
     db.flush()
     _replace_assets(db, user.id, payload.assets)
     _replace_schedule(db, user.id, payload.schedule)
+    _add_history(db, user.id, "created", None, None, "Employee created", current_user.id)
     db.commit()
     return _employee_out(_load_employee(db, user.id))
 
@@ -94,6 +113,9 @@ def update_employee(
         raise HTTPException(status_code=404, detail="Employee not found")
     _validate_unique_employee(db, payload.username, payload.email, payload.employee_code, exclude_id=user.id)
     _validate_refs(db, current_user, payload.manager_id, payload.project_id, payload.shift_id)
+    before = _snapshot_employee(user)
+    before_assets = _assets_summary(user.assets)
+    before_schedule = _schedule_summary(user.shift_assignments)
 
     user.username = payload.username.strip()
     user.full_name = payload.full_name.strip()
@@ -113,6 +135,12 @@ def update_employee(
 
     _replace_assets(db, user.id, payload.assets)
     _replace_schedule(db, user.id, payload.schedule)
+    db.flush()
+    db.expire(user, ["assets", "shift_assignments"])
+    db.refresh(user)
+    _record_field_history(db, user.id, before, _snapshot_employee(user), current_user.id)
+    _record_summary_history(db, user.id, "assets", before_assets, _assets_summary(user.assets), current_user.id)
+    _record_summary_history(db, user.id, "schedule", before_schedule, _schedule_summary(user.shift_assignments), current_user.id)
     db.commit()
     return _employee_out(_load_employee(db, user.id))
 
@@ -126,8 +154,10 @@ def delete_employee(
     user = _load_employee(db, employee_id)
     if not user or not _can_view_employee(current_user, user):
         raise HTTPException(status_code=404, detail="Employee not found")
+    old_status = user.employment_status
     user.employment_status = "left"
     user.is_active = False
+    _add_history(db, user.id, "status_changed", "employment_status", old_status, "left", current_user.id)
     db.commit()
 
 
@@ -174,7 +204,20 @@ def employee_insights(
             )
             for row in activities[:50]
         ],
+        history=_history_rows(user.history),
     )
+
+
+@router.get("/{employee_id}/history", response_model=EmployeeHistoryResponse, summary="Employee change history")
+def employee_history(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "manager")),
+):
+    user = _load_employee(db, employee_id)
+    if not user or not _can_view_employee(current_user, user):
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return EmployeeHistoryResponse(items=_history_rows(user.history))
 
 
 def _employee_query(db: Session):
@@ -185,6 +228,7 @@ def _employee_query(db: Session):
         joinedload(User.project),
         joinedload(User.shift),
         joinedload(User.created_by),
+        joinedload(User.history).joinedload(EmployeeHistory.changed_by),
     ).filter(User.role == "employee")
 
 
@@ -282,8 +326,8 @@ def _validate_unique_employee(
 
 
 def _validate_refs(db: Session, current_user: User, manager_id: int | None, project_id: int | None, shift_id: int | None) -> None:
-    if manager_id and not db.query(User).filter(User.id == manager_id, User.role == "manager").first():
-        raise HTTPException(status_code=400, detail="Manager not found")
+    if manager_id and not db.query(User).filter(User.id == manager_id, User.is_active.is_(True)).first():
+        raise HTTPException(status_code=400, detail="Manager/leader employee not found")
     if project_id:
         project = db.query(Project).filter(Project.id == project_id).first()
         if not project or (current_user.role == "manager" and project.manager_id != current_user.id):
@@ -303,3 +347,82 @@ def _clean(value: str | None) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _snapshot_employee(user: User) -> dict[str, str | None]:
+    return {
+        "full_name": user.full_name,
+        "email": user.email,
+        "employee_code": user.employee_code,
+        "department": user.department,
+        "phone": user.phone,
+        "location": user.location,
+        "designation": user.designation,
+        "employment_status": user.employment_status,
+        "manager_id": str(user.manager_id) if user.manager_id else None,
+        "project_id": str(user.project_id) if user.project_id else None,
+        "shift_id": str(user.shift_id) if user.shift_id else None,
+    }
+
+
+def _record_field_history(db: Session, user_id: int, before: dict, after: dict, changed_by_id: int | None) -> None:
+    for field_name, old_value in before.items():
+        new_value = after.get(field_name)
+        if old_value != new_value:
+            _add_history(db, user_id, "field_changed", field_name, old_value, new_value, changed_by_id)
+
+
+def _record_summary_history(db: Session, user_id: int, field_name: str, old_value: str, new_value: str, changed_by_id: int | None) -> None:
+    if old_value != new_value:
+        _add_history(db, user_id, f"{field_name}_changed", field_name, old_value, new_value, changed_by_id)
+
+
+def _add_history(
+    db: Session,
+    user_id: int,
+    change_type: str,
+    field_name: str | None,
+    old_value: str | None,
+    new_value: str | None,
+    changed_by_id: int | None,
+) -> None:
+    db.add(EmployeeHistory(
+        user_id=user_id,
+        change_type=change_type,
+        field_name=field_name,
+        old_value=old_value,
+        new_value=new_value,
+        changed_by_id=changed_by_id,
+    ))
+
+
+def _assets_summary(assets) -> str:
+    rows = [
+        f"{asset.asset_name} ({asset.asset_tag or asset.asset_type or 'asset'})"
+        for asset in sorted(assets or [], key=lambda item: item.id or 0)
+    ]
+    return "; ".join(rows)
+
+
+def _schedule_summary(assignments) -> str:
+    rows = [
+        f"{item.weekday}:{item.shift.name if item.shift else item.shift_id}"
+        for item in sorted(assignments or [], key=lambda row: row.weekday)
+    ]
+    return "; ".join(rows)
+
+
+def _history_rows(history) -> list[EmployeeHistoryOut]:
+    return [
+        EmployeeHistoryOut(
+            id=row.id,
+            change_type=row.change_type,
+            field_name=row.field_name,
+            old_value=row.old_value,
+            new_value=row.new_value,
+            changed_by_id=row.changed_by_id,
+            changed_by_name=(row.changed_by.full_name or row.changed_by.username) if row.changed_by else None,
+            created_at=row.created_at,
+        )
+        for row in sorted(history or [], key=lambda item: item.created_at, reverse=True)
+    ]

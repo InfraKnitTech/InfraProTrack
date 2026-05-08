@@ -749,10 +749,16 @@ td {
 
 .employee-form-grid,
 .shift-form-grid,
-.weekday-grid {
+.weekday-grid,
+.employee-filter-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+.employee-filter-grid {
+  grid-template-columns: 1.4fr repeat(5, minmax(130px, 1fr));
+  margin-bottom: 1rem;
 }
 
 .employee-form label,
@@ -1107,6 +1113,7 @@ td {
   .employee-form-grid,
   .shift-form-grid,
   .weekday-grid,
+  .employee-filter-grid,
   .asset-row,
   .insight-strip {
     grid-template-columns: 1fr;

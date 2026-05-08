@@ -18,3 +18,19 @@ class EmployeeAsset(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="assets")
+
+
+class EmployeeHistory(Base):
+    __tablename__ = "employee_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    change_type = Column(String(80), nullable=False)
+    field_name = Column(String(120), nullable=True)
+    old_value = Column(String(1000), nullable=True)
+    new_value = Column(String(1000), nullable=True)
+    changed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", foreign_keys=[user_id], back_populates="history")
+    changed_by = relationship("User", foreign_keys=[changed_by_id])

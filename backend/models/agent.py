@@ -16,6 +16,7 @@ class AgentDevice(Base):
     os_version = Column(String(255), nullable=True)
     agent_version = Column(String(50), nullable=True)
     username = Column(String(255), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     ip_address = Column(String(64), nullable=True)
     status = Column(String(30), default="active", nullable=False, index=True)
     token_id = Column(String(64), nullable=False, unique=True, index=True)
