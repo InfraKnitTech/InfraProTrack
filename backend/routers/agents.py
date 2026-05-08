@@ -46,6 +46,42 @@ def _credentials_response(agent: AgentDevice, token_id: str, token: str, securit
     )
 
 
+def _pending_response(pending: AgentRegistrationRequest, message: str) -> AgentRegisterResponse:
+    return AgentRegisterResponse(
+        status="pending_approval",
+        request_id=pending.request_id,
+        message=message,
+    )
+
+
+def _upsert_pending_request(
+    db: Session,
+    body: AgentRegisterRequest,
+    request: Request,
+    existing_agent: AgentDevice | None = None,
+) -> AgentRegistrationRequest:
+    pending = db.query(AgentRegistrationRequest).filter(
+        AgentRegistrationRequest.device_id == body.device_id,
+        AgentRegistrationRequest.status == "pending",
+    ).first()
+    if not pending:
+        pending = AgentRegistrationRequest(
+            request_id=token_urlsafe(24),
+            device_id=body.device_id,
+            status="pending",
+        )
+        db.add(pending)
+
+    pending.hostname = body.hostname
+    pending.os_type = body.os_type
+    pending.os_version = body.os_version
+    pending.agent_version = body.agent_version
+    pending.username = body.username
+    pending.ip_address = _client_ip(request)
+    pending.agent_id = existing_agent.id if existing_agent else None
+    return pending
+
+
 def _issue_credentials(db: Session, identity: AgentRegisterRequest, request: Request) -> tuple[AgentDevice, str, str, str]:
     token_id, token, security_key = generate_agent_credentials()
     existing = db.query(AgentDevice).filter(AgentDevice.device_id == identity.device_id).first()
@@ -87,6 +123,15 @@ def _issue_credentials(db: Session, identity: AgentRegisterRequest, request: Req
 
 @router.post("/register", response_model=AgentRegisterResponse, summary="Register an agent device")
 def register_agent(body: AgentRegisterRequest, request: Request, db: Session = Depends(get_db)):
+    existing = db.query(AgentDevice).filter(AgentDevice.device_id == body.device_id).first()
+    if existing:
+        pending = _upsert_pending_request(db, body, request, existing)
+        db.commit()
+        return _pending_response(
+            pending,
+            "Existing agent is trying to re-register and is waiting for admin approval",
+        )
+
     if body.master_password and body.master_password == agent_config.MASTER_PASSWORD:
         agent, token_id, token, security_key = _issue_credentials(db, body, request)
         db.commit()
@@ -96,37 +141,9 @@ def register_agent(body: AgentRegisterRequest, request: Request, db: Session = D
             message="Agent registered",
         )
 
-    pending = db.query(AgentRegistrationRequest).filter(
-        AgentRegistrationRequest.device_id == body.device_id,
-        AgentRegistrationRequest.status == "pending",
-    ).first()
-    if not pending:
-        pending = AgentRegistrationRequest(
-            request_id=token_urlsafe(24),
-            device_id=body.device_id,
-            hostname=body.hostname,
-            os_type=body.os_type,
-            os_version=body.os_version,
-            agent_version=body.agent_version,
-            username=body.username,
-            ip_address=_client_ip(request),
-            status="pending",
-        )
-        db.add(pending)
-    else:
-        pending.hostname = body.hostname
-        pending.os_type = body.os_type
-        pending.os_version = body.os_version
-        pending.agent_version = body.agent_version
-        pending.username = body.username
-        pending.ip_address = _client_ip(request)
-
+    pending = _upsert_pending_request(db, body, request)
     db.commit()
-    return AgentRegisterResponse(
-        status="pending_approval",
-        request_id=pending.request_id,
-        message="Agent is waiting for admin approval",
-    )
+    return _pending_response(pending, "Agent is waiting for admin approval")
 
 
 @router.get(

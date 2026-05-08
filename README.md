@@ -32,7 +32,7 @@ Current working stack:
 - Custom group APIs are available at `GET /api/groups`, `POST /api/groups`, `PUT /api/groups/{group_id}`, `DELETE /api/groups/{group_id}`, and `GET /api/groups/options`.
 - Employee management APIs are available at `GET/POST /api/employees`, `GET/PUT/DELETE /api/employees/{employee_id}`, `GET /api/employees/pending-agents`, `GET /api/employees/{employee_id}/insights`, and `GET /api/employees/{employee_id}/history`.
 - Shift block APIs are available at `GET/POST /api/shifts` and `PUT/DELETE /api/shifts/{shift_id}`.
-- Seed data verifies baseline admin, manager, employees, shifts, project, manager profile, and productivity rules.
+- Seed data verifies baseline admin, manager, shifts, project, manager profile, and productivity rules. Demo employees are no longer seeded.
 - Login now returns a JWT directly from `POST /api/auth/login`.
 - OTP has been removed from the active login flow.
 - API testing is available at `/docs`, `/redoc`, `/redocs`, and `/redocs/a`.
@@ -136,7 +136,7 @@ Remove service:
 .\remove_service.ps1
 ```
 
-Runtime config is written to `%ProgramData%\InfraProTrack\Agent\config.json`. The checked-in `agent/config.json` is the install template. If the agent has a correct `master_password`, it auto-registers and stores `agent_token_id`, `agent_token`, and `security_key`. If the master password is empty or wrong, the agent waits for approval in the frontend notification menu.
+For local testing, runtime config is written to the project-local `agent/config.json`, not `%ProgramData%`. Set `INFRAPROTRACK_AGENT_HOME` only when you intentionally want a different runtime folder. If a new agent has a correct `master_password`, it auto-registers and stores `agent_token_id`, `agent_token`, and `security_key`. If the master password is empty or wrong, the agent waits for approval in the frontend notification menu. If an already-known device re-registers after local credentials are deleted, the backend keeps the same `agent_devices.id`, shows a re-registration approval notification, rotates credentials on approval, and preserves old agent-linked data.
 
 ## Linux Agent Test
 

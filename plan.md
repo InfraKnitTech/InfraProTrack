@@ -337,6 +337,8 @@ Employee management follow-up:
 
 Employee lifecycle follow-up:
 - Agent registration now leaves unlinked devices as pending employee confirmations; admins complete the employee profile and bind the unique agent token to that employee.
+- Windows agent local tests now read/write `agent/config.json` inside the project by default instead of `%ProgramData%`.
+- Known-device re-registration now creates an admin notification, keeps the same backend agent id, rotates credentials only after approval, and preserves existing agent-linked data.
 - Employee directory filters now support name/email, department, designation, project, shift, and status.
 - Employee history records changes to manager/leader, project, shift, department, designation, status, assets, schedule, and profile details.
 - Employees tab now exposes a History view per employee.
@@ -346,5 +348,6 @@ Employee UI follow-up:
 - Add Employee is now a primary blue action in the directory header.
 - Shift timings, employee edit, details, insights, and history now open as in-page panels from directory actions.
 - Employees tab now includes a pending employee confirmation list for registered agents and a sticky top navigation bar for long dashboard pages.
+- Demo employee seed rows were removed; the live database employee list was cleaned for testing.
 
 

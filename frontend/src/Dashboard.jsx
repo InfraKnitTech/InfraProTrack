@@ -863,7 +863,11 @@ export default function Dashboard() {
                   <div className="pending-agent" key={agent.request_id}>
                     <div>
                       <strong>{agent.hostname}</strong>
-                      <small>{agent.os_type} - {agent.username || 'unknown user'}</small>
+                      <small>
+                        {agent.request_type === 'reregistration'
+                          ? `Existing agent #${agent.agent_id} is trying to re-register`
+                          : `${agent.os_type} - ${agent.username || 'unknown user'}`}
+                      </small>
                     </div>
                     <div className="pending-actions">
                       <button onClick={() => decideAgent(agent.request_id, 'approve')}>Approve</button>

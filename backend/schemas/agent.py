@@ -76,6 +76,8 @@ class AgentConfigOut(BaseModel):
 class PendingAgentOut(BaseModel):
     id: int
     request_id: str
+    agent_id: Optional[int] = None
+    request_type: str = "new_registration"
     device_id: str
     hostname: str
     os_type: str

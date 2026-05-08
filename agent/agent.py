@@ -24,7 +24,7 @@ CONFIG_TEMPLATE_PATH = BASE_DIR / "config.json"
 DATA_DIR = Path(
     os.environ.get(
         "INFRAPROTRACK_AGENT_HOME",
-        str(Path(os.environ.get("ProgramData", str(BASE_DIR))) / "InfraProTrack" / "Agent"),
+        str(BASE_DIR),
     )
 )
 CONFIG_PATH = DATA_DIR / "config.json"
@@ -95,8 +95,8 @@ def load_config() -> dict[str, Any]:
         config["device_id"] = build_device_id(config["hostname"])
         changed = True
 
-    # Keep connection/auth bootstrap values aligned with the checked-in template,
-    # while leaving runtime-issued credentials stored in ProgramData intact.
+    # Keep connection/auth bootstrap values aligned with the local project template,
+    # while leaving runtime-issued credentials intact in the same project config.
     for field in ("server_url", "master_password"):
         template_value = template_config.get(field)
         if template_value and config.get(field) != template_value:

@@ -63,31 +63,6 @@ def seed():
             db.add(project)
             db.flush()
 
-        _ensure_user(
-            db,
-            username="employee",
-            full_name="Demo Employee",
-            email="employee@protrack.com",
-            password="employee123",
-            role="employee",
-            department="Delivery",
-            manager_id=manager.id,
-            project_id=project.id,
-            shift_id=day_shift.id,
-        )
-        _ensure_user(
-            db,
-            username="night.employee",
-            full_name="Night Shift Employee",
-            email="night.employee@protrack.com",
-            password="employee123",
-            role="employee",
-            department="Support",
-            manager_id=manager.id,
-            project_id=project.id,
-            shift_id=night_shift.id,
-        )
-
         for app_name, domain, category, severity in [
             ("Visual Studio Code", None, "productive", "low"),
             ("Microsoft Excel", None, "productive", "low"),
@@ -110,7 +85,7 @@ def seed():
                 ))
 
         db.commit()
-        print("Baseline shifts, project, users, manager profile, and app rules verified.")
+        print("Baseline shifts, project, admin, manager profile, and app rules verified.")
         print("Admin login: admin / pass123")
     finally:
         db.close()

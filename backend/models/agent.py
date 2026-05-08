@@ -53,6 +53,10 @@ class AgentRegistrationRequest(Base):
     decided_at = Column(DateTime, nullable=True)
     decided_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
+    @property
+    def request_type(self) -> str:
+        return "reregistration" if self.agent_id else "new_registration"
+
 
 class AgentHeartbeat(Base):
     __tablename__ = "agent_heartbeats"
