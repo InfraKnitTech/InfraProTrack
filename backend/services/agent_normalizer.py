@@ -1,15 +1,11 @@
 import json
-import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from secrets import token_urlsafe
 from typing import Any
 from urllib.parse import urlparse
 
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from core.security import get_password_hash
 from models.activity_log import ActivityLog
 from models.agent import AgentDevice, FileUsage, RawAgentEvent
 from models.monitoring import AppRule, IdleLog
@@ -34,6 +30,9 @@ def normalize_pending_events(db: Session, agent_id: int | None = None, limit: in
     for raw in events:
         payload = _payload(raw)
         user = _resolve_user(db, raw.agent, payload)
+        if not user:
+            result.skipped += 1
+            continue
         created = _normalize_event(db, raw, user, payload)
         raw.normalized = True
         if created:
@@ -189,38 +188,10 @@ def _normalize_url_usage(db: Session, user: User, payload: dict[str, Any], fallb
     return True
 
 
-def _resolve_user(db: Session, agent: AgentDevice, payload: dict[str, Any]) -> User:
-    username = _clean(payload.get("username")) or _clean(agent.username) or _clean(agent.hostname) or f"agent-{agent.id}"
-    user = db.query(User).filter(or_(
-        User.username == username,
-        User.email == username,
-        User.employee_code == username,
-    )).first()
-    if user:
-        return user
-
-    safe_username = _safe_username(username)
-    email = f"{safe_username}@agents.local"
-    existing = db.query(User).filter(or_(
-        User.username == safe_username,
-        User.email == email,
-    )).first()
-    if existing:
-        return existing
-
-    user = User(
-        username=safe_username,
-        full_name=username,
-        email=email,
-        password=get_password_hash(token_urlsafe(24)),
-        role="employee",
-        employee_code=f"agent-{agent.id}",
-        department="Discovered Agents",
-        is_active=True,
-    )
-    db.add(user)
-    db.flush()
-    return user
+def _resolve_user(db: Session, agent: AgentDevice, payload: dict[str, Any]) -> User | None:
+    if not agent.user_id:
+        return None
+    return db.query(User).filter(User.id == agent.user_id, User.role == "employee").first()
 
 
 def _classify_app(db: Session, app_name: str, window_title: str | None) -> str:
@@ -316,8 +287,3 @@ def _clean(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
-
-
-def _safe_username(value: str) -> str:
-    normalized = re.sub(r"[^a-zA-Z0-9_.-]+", ".", value.lower()).strip(".")
-    return normalized[:80] or "agent-user"

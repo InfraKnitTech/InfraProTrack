@@ -12,10 +12,7 @@ from core.agent_auth import (
 )
 from core.config import agent as agent_config
 from core.deps import get_db, require_role
-from core.security import get_password_hash
 from models.agent import AgentDevice, AgentHeartbeat, AgentRegistrationRequest, RawAgentEvent
-from models.employee import EmployeeHistory
-from models.user import User
 from schemas.agent import (
     AgentConfigOut,
     AgentCredentials,
@@ -52,7 +49,6 @@ def _credentials_response(agent: AgentDevice, token_id: str, token: str, securit
 def _issue_credentials(db: Session, identity: AgentRegisterRequest, request: Request) -> tuple[AgentDevice, str, str, str]:
     token_id, token, security_key = generate_agent_credentials()
     existing = db.query(AgentDevice).filter(AgentDevice.device_id == identity.device_id).first()
-    employee = _ensure_employee_for_agent(db, identity)
 
     if existing:
         existing.hostname = identity.hostname
@@ -60,7 +56,6 @@ def _issue_credentials(db: Session, identity: AgentRegisterRequest, request: Req
         existing.os_version = identity.os_version
         existing.agent_version = identity.agent_version
         existing.username = identity.username
-        existing.user_id = employee.id if employee else existing.user_id
         existing.ip_address = _client_ip(request)
         existing.status = "active"
         existing.is_active = True
@@ -79,7 +74,6 @@ def _issue_credentials(db: Session, identity: AgentRegisterRequest, request: Req
         os_version=identity.os_version,
         agent_version=identity.agent_version,
         username=identity.username,
-        user_id=employee.id if employee else None,
         ip_address=_client_ip(request),
         status="active",
         token_id=token_id,
@@ -89,77 +83,6 @@ def _issue_credentials(db: Session, identity: AgentRegisterRequest, request: Req
     db.add(agent)
     db.flush()
     return agent, token_id, token, security_key
-
-
-def _ensure_employee_for_agent(db: Session, identity: AgentRegisterRequest) -> User | None:
-    display_name = (identity.hostname or identity.username or identity.device_id or "").strip()
-    if not display_name:
-        return None
-    candidates = [identity.username, identity.hostname, _safe_username(display_name)]
-    for candidate in candidates:
-        if not candidate:
-            continue
-        user = db.query(User).filter(User.username == candidate.strip()).first()
-        if user:
-            return user
-
-    username = _unique_username(db, _safe_username(display_name))
-    email = _unique_email(db, f"{username}@agent.local")
-    user = User(
-        username=username,
-        full_name=display_name,
-        email=email,
-        password=get_password_hash(token_urlsafe(18)),
-        role="employee",
-        employee_code=_unique_employee_code(db, f"AGENT-{identity.device_id[:24]}"),
-        employment_status="working",
-        is_active=True,
-    )
-    db.add(user)
-    db.flush()
-    db.add(EmployeeHistory(
-        user_id=user.id,
-        change_type="created_from_agent",
-        field_name=None,
-        old_value=None,
-        new_value=f"Auto-created from agent device {identity.device_id}",
-        changed_by_id=None,
-    ))
-    return user
-
-
-def _safe_username(value: str) -> str:
-    cleaned = "".join(ch.lower() if ch.isalnum() else "." for ch in value.strip())
-    cleaned = ".".join(part for part in cleaned.split(".") if part)
-    return (cleaned or "agent.employee")[:90]
-
-
-def _unique_username(db: Session, base: str) -> str:
-    candidate = base
-    index = 2
-    while db.query(User.id).filter(User.username == candidate).first():
-        candidate = f"{base[:85]}.{index}"
-        index += 1
-    return candidate
-
-
-def _unique_email(db: Session, base: str) -> str:
-    local, domain = base.split("@", 1)
-    candidate = base
-    index = 2
-    while db.query(User.id).filter(User.email == candidate).first():
-        candidate = f"{local[:80]}.{index}@{domain}"
-        index += 1
-    return candidate
-
-
-def _unique_employee_code(db: Session, base: str) -> str:
-    candidate = base
-    index = 2
-    while db.query(User.id).filter(User.employee_code == candidate).first():
-        candidate = f"{base[:55]}-{index}"
-        index += 1
-    return candidate
 
 
 @router.post("/register", response_model=AgentRegisterResponse, summary="Register an agent device")

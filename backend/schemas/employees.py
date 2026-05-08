@@ -48,6 +48,7 @@ class EmployeeBase(BaseModel):
 
 
 class EmployeeCreate(EmployeeBase):
+    agent_id: int | None = None
     password: str | None = Field(default=None, min_length=6, max_length=128)
     assets: list[EmployeeAssetIn] = Field(default_factory=list)
     schedule: list[EmployeeScheduleIn] = Field(default_factory=list)
@@ -75,6 +76,28 @@ class EmployeeOut(EmployeeBase):
 
 class EmployeeListResponse(BaseModel):
     items: list[EmployeeOut]
+
+
+class PendingEmployeeAgentOut(BaseModel):
+    agent_id: int
+    device_id: str
+    hostname: str
+    username: str | None
+    os_type: str
+    os_version: str | None
+    agent_version: str | None
+    ip_address: str | None
+    status: str
+    last_seen_at: datetime | None
+    registered_at: datetime | None
+    suggested_full_name: str
+    suggested_username: str
+    suggested_email: str
+    suggested_employee_code: str
+
+
+class PendingEmployeeAgentListResponse(BaseModel):
+    items: list[PendingEmployeeAgentOut]
 
 
 class EmployeeInsightEvent(BaseModel):

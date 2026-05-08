@@ -336,7 +336,7 @@ Employee management follow-up:
 - Rebuilt the Employees tab around live directory, add/edit employee, custom shift creation, and employee insights views.
 
 Employee lifecycle follow-up:
-- Agent registration now links to an existing employee or creates a new employee from the agent/device name.
+- Agent registration now leaves unlinked devices as pending employee confirmations; admins complete the employee profile and bind the unique agent token to that employee.
 - Employee directory filters now support name/email, department, designation, project, shift, and status.
 - Employee history records changes to manager/leader, project, shift, department, designation, status, assets, schedule, and profile details.
 - Employees tab now exposes a History view per employee.
@@ -345,5 +345,6 @@ Employee UI follow-up:
 - Reworked Employees into a single Workforce Directory view instead of separate top-level sub-tabs.
 - Add Employee is now a primary blue action in the directory header.
 - Shift timings, employee edit, details, insights, and history now open as in-page panels from directory actions.
+- Employees tab now includes a pending employee confirmation list for registered agents and a sticky top navigation bar for long dashboard pages.
 
 

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from core.deps import get_db, require_role
 from core.security import get_password_hash
+from models.agent import AgentDevice
 from models.activity_log import ActivityLog
 from models.employee import EmployeeAsset, EmployeeHistory
 from models.project import Project
@@ -19,6 +20,8 @@ from schemas.employees import (
     EmployeeInsightResponse,
     EmployeeListResponse,
     EmployeeOut,
+    PendingEmployeeAgentListResponse,
+    PendingEmployeeAgentOut,
     EmployeeUpdate,
 )
 
@@ -62,6 +65,7 @@ def create_employee(
 ):
     _validate_unique_employee(db, payload.username, payload.email, payload.employee_code)
     _validate_refs(db, current_user, payload.manager_id, payload.project_id, payload.shift_id)
+    agent = _load_unlinked_agent(db, payload.agent_id) if payload.agent_id else None
     user = User(
         username=payload.username.strip(),
         full_name=payload.full_name.strip(),
@@ -82,11 +86,34 @@ def create_employee(
     )
     db.add(user)
     db.flush()
+    if agent:
+        agent.user_id = user.id
+        _add_history(
+            db,
+            user.id,
+            "agent_linked",
+            "agent_id",
+            None,
+            f"{agent.hostname} ({agent.device_id})",
+            current_user.id,
+        )
     _replace_assets(db, user.id, payload.assets)
     _replace_schedule(db, user.id, payload.schedule)
     _add_history(db, user.id, "created", None, None, "Employee created", current_user.id)
     db.commit()
     return _employee_out(_load_employee(db, user.id))
+
+
+@router.get("/pending-agents", response_model=PendingEmployeeAgentListResponse, summary="List registered agents waiting for employee confirmation")
+def pending_employee_agents(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("admin", "manager")),
+):
+    agents = db.query(AgentDevice).filter(
+        AgentDevice.is_active.is_(True),
+        AgentDevice.user_id.is_(None),
+    ).order_by(AgentDevice.last_seen_at.desc(), AgentDevice.registered_at.desc()).all()
+    return PendingEmployeeAgentListResponse(items=[_pending_agent_out(db, agent) for agent in agents])
 
 
 @router.get("/{employee_id}", response_model=EmployeeOut, summary="Get employee details")
@@ -334,6 +361,71 @@ def _validate_refs(db: Session, current_user: User, manager_id: int | None, proj
             raise HTTPException(status_code=400, detail="Project not found")
     if shift_id and not db.query(Shift).filter(Shift.id == shift_id).first():
         raise HTTPException(status_code=400, detail="Shift not found")
+
+
+def _load_unlinked_agent(db: Session, agent_id: int | None) -> AgentDevice:
+    agent = db.query(AgentDevice).filter(AgentDevice.id == agent_id, AgentDevice.is_active.is_(True)).first()
+    if not agent:
+        raise HTTPException(status_code=400, detail="Agent not found")
+    if agent.user_id:
+        raise HTTPException(status_code=400, detail="Agent is already linked to an employee")
+    return agent
+
+
+def _pending_agent_out(db: Session, agent: AgentDevice) -> PendingEmployeeAgentOut:
+    display_name = _clean(agent.hostname) or _clean(agent.username) or f"Agent {agent.id}"
+    username = _unique_username(db, _safe_identifier(agent.username or agent.hostname or f"agent-{agent.id}"))
+    return PendingEmployeeAgentOut(
+        agent_id=agent.id,
+        device_id=agent.device_id,
+        hostname=agent.hostname,
+        username=agent.username,
+        os_type=agent.os_type,
+        os_version=agent.os_version,
+        agent_version=agent.agent_version,
+        ip_address=agent.ip_address,
+        status=agent.status,
+        last_seen_at=agent.last_seen_at,
+        registered_at=agent.registered_at,
+        suggested_full_name=display_name,
+        suggested_username=username,
+        suggested_email=_unique_email(db, f"{username}@agents.infraprotrack.com"),
+        suggested_employee_code=_unique_employee_code(db, f"AGENT-{agent.device_id[:24]}"),
+    )
+
+
+def _safe_identifier(value: str) -> str:
+    cleaned = "".join(ch.lower() if ch.isalnum() else "." for ch in value.strip())
+    cleaned = ".".join(part for part in cleaned.split(".") if part)
+    return (cleaned or "agent.employee")[:90]
+
+
+def _unique_username(db: Session, base: str) -> str:
+    candidate = base
+    index = 2
+    while db.query(User.id).filter(User.username == candidate).first():
+        candidate = f"{base[:85]}.{index}"
+        index += 1
+    return candidate
+
+
+def _unique_email(db: Session, base: str) -> str:
+    local, domain = base.split("@", 1)
+    candidate = base
+    index = 2
+    while db.query(User.id).filter(User.email == candidate).first():
+        candidate = f"{local[:80]}.{index}@{domain}"
+        index += 1
+    return candidate
+
+
+def _unique_employee_code(db: Session, base: str) -> str:
+    candidate = base
+    index = 2
+    while db.query(User.id).filter(User.employee_code == candidate).first():
+        candidate = f"{base[:55]}-{index}"
+        index += 1
+    return candidate
 
 
 def _can_view_employee(current_user: User, target: User) -> bool:

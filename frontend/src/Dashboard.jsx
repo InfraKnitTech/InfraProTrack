@@ -82,6 +82,7 @@ const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satur
 
 function blankEmployeeForm() {
   return {
+    agent_id: '',
     username: '',
     full_name: '',
     email: '',
@@ -113,6 +114,7 @@ function blankShiftForm() {
 
 function employeeFormFromRecord(employee) {
   return {
+    agent_id: '',
     username: employee.username || '',
     full_name: employee.full_name || '',
     email: employee.email || '',
@@ -159,6 +161,7 @@ export default function Dashboard() {
   const [managerSummary, setManagerSummary] = useState([]);
   const [employeeSummary, setEmployeeSummary] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [pendingEmployeeAgents, setPendingEmployeeAgents] = useState([]);
   const [employeeFilters, setEmployeeFilters] = useState({
     name: '',
     department: '',
@@ -347,11 +350,28 @@ export default function Dashboard() {
       ]);
       setEmployees(employeesRes.data.items || []);
       setShifts(shiftsRes.data.items || []);
+      fetchPendingEmployeeAgents(headers);
     } catch (err) {
       if (handleAuthError(err)) {
         return;
       }
       console.error('Failed to fetch employees and shifts', err);
+    }
+  };
+
+  const fetchPendingEmployeeAgents = async (headersOverride = null) => {
+    try {
+      const headers = headersOverride || getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      const res = await axios.get(`${API_BASE}/api/employees/pending-agents`, { headers });
+      setPendingEmployeeAgents(res.data.items || []);
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to fetch pending employee agents', err);
     }
   };
 
@@ -401,6 +421,7 @@ export default function Dashboard() {
         headers,
       });
       fetchPendingAgents();
+      fetchPendingEmployeeAgents(headers);
     } catch (err) {
       if (handleAuthError(err)) {
         return;
@@ -667,14 +688,17 @@ export default function Dashboard() {
         password: employeeForm.password || null,
         assets: employeeForm.assets.filter((asset) => asset.asset_name.trim()),
         schedule: employeeForm.schedule,
+        agent_id: employeeForm.agent_id ? Number(employeeForm.agent_id) : null,
       };
       if (editingEmployeeId) {
+        delete payload.agent_id;
         await axios.put(`${API_BASE}/api/employees/${editingEmployeeId}`, payload, { headers });
       } else {
         await axios.post(`${API_BASE}/api/employees`, payload, { headers });
       }
       resetEmployeeForm();
       fetchEmployeeDirectory();
+      fetchPendingEmployeeAgents();
       fetchGroups();
     } catch (err) {
       if (handleAuthError(err)) {
@@ -694,6 +718,19 @@ export default function Dashboard() {
     setEditingEmployeeId(null);
     setEmployeeForm(blankEmployeeForm());
     setEmployeeSubTab('directory');
+  };
+
+  const startEmployeeFromAgent = (agent) => {
+    setEditingEmployeeId(null);
+    setEmployeeForm({
+      ...blankEmployeeForm(),
+      agent_id: agent.agent_id,
+      username: agent.suggested_username || '',
+      full_name: agent.suggested_full_name || agent.hostname || '',
+      email: agent.suggested_email || '',
+      employee_code: agent.suggested_employee_code || '',
+    });
+    setEmployeeSubTab('form');
   };
 
   const offboardEmployee = async (employeeId) => {
@@ -1193,6 +1230,10 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <div className="module-actions">
+                      <button className="btn btn-secondary" onClick={() => setEmployeeSubTab('pending-agents')}>
+                        <ShieldCheck size={16} />
+                        Pending employees {pendingEmployeeAgents.length > 0 ? `(${pendingEmployeeAgents.length})` : ''}
+                      </button>
                       <button className="btn btn-secondary" onClick={() => setEmployeeSubTab('shifts')}>
                         <Clock size={16} />
                         Shift timings
@@ -1253,6 +1294,41 @@ export default function Dashboard() {
                 </>
               )}
 
+              {employeeSubTab === 'pending-agents' && (
+                <>
+                  <div className="module-header">
+                    <div>
+                      <ShieldCheck size={18} />
+                      <div>
+                        <h2>Pending Employee Confirmations</h2>
+                        <p>Registered agents waiting for employee profile completion</p>
+                      </div>
+                    </div>
+                    <button className="btn btn-secondary" onClick={() => setEmployeeSubTab('directory')}>Back to workforce</button>
+                  </div>
+                  <DataTable
+                    columns={['Device', 'Suggested employee', 'Agent user', 'OS', 'IP', 'Last seen', 'Status', 'Action']}
+                    rows={pendingEmployeeAgents.map((agent) => [
+                      agent.hostname,
+                      <div className="stacked-cell">
+                        <strong>{agent.suggested_full_name}</strong>
+                        <small>{agent.suggested_email}</small>
+                      </div>,
+                      agent.username || '-',
+                      `${agent.os_type}${agent.os_version ? ` ${agent.os_version}` : ''}`,
+                      agent.ip_address || '-',
+                      agent.last_seen_at ? new Date(agent.last_seen_at).toLocaleString() : '-',
+                      <span className="status-pill">{agent.status}</span>,
+                      <button className="btn btn-primary compact" onClick={() => startEmployeeFromAgent(agent)}>
+                        <UserPlus size={15} />
+                        Complete
+                      </button>,
+                    ])}
+                    emptyMessage="No registered agents are waiting for employee confirmation."
+                  />
+                </>
+              )}
+
               {employeeSubTab === 'form' && (
                 <>
                   <div className="module-header">
@@ -1266,6 +1342,15 @@ export default function Dashboard() {
                     <button className="btn btn-secondary" onClick={resetEmployeeForm}>Back to workforce</button>
                   </div>
                   <form className="employee-form" onSubmit={saveEmployee}>
+                    {employeeForm.agent_id && (
+                      <div className="linked-agent-banner">
+                        <ShieldCheck size={17} />
+                        <div>
+                          <strong>Agent token will be linked to this employee</strong>
+                          <small>Complete the missing profile, assignment, project, and shift details before creating the employee.</small>
+                        </div>
+                      </div>
+                    )}
                     <div className="employee-form-grid">
                       <label><span>Full name</span><input className="input-field" name="full_name" value={employeeForm.full_name} onChange={handleEmployeeChange} required /></label>
                       <label><span>Username</span><input className="input-field" name="username" value={employeeForm.username} onChange={handleEmployeeChange} required /></label>
