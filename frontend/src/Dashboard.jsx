@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bar,
   BarChart,
@@ -145,6 +145,7 @@ export default function Dashboard() {
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
   const [metrics, setMetrics] = useState({
     total_productive: '0h 00m',
     total_idle: '0h 00m',
@@ -238,6 +239,18 @@ export default function Dashboard() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    const closeUserMenu = (event) => {
+      if (!userMenuRef.current || userMenuRef.current.contains(event.target)) {
+        return;
+      }
+      setUserMenuOpen(false);
+    };
+
+    document.addEventListener('mousedown', closeUserMenu);
+    return () => document.removeEventListener('mousedown', closeUserMenu);
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -824,7 +837,7 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-          <div className="user-menu-wrap">
+          <div className="user-menu-wrap" ref={userMenuRef}>
             <button className="user-square" onClick={() => setUserMenuOpen((open) => !open)} aria-expanded={userMenuOpen}>
               <span>{(user.username || 'A').slice(0, 1).toUpperCase()}</span>
               <div>
@@ -866,10 +879,6 @@ export default function Dashboard() {
               <small>Polling every 5 seconds</small>
             </div>
           </div>
-          <button className="nav-item danger" onClick={handleLogout}>
-            <LogOut size={18} />
-            <span>Logout</span>
-          </button>
         </div>
       </aside>
 
