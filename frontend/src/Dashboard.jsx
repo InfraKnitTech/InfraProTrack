@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { clearSession, isTokenValid } from './auth';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5002';
 const COLORS = ['#2563eb', '#059669', '#f59e0b', '#dc2626', '#7c3aed', '#0891b2'];
@@ -124,6 +125,25 @@ export default function Dashboard() {
     }
   }, []);
 
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('token');
+    if (!isTokenValid(token)) {
+      clearSession();
+      navigate('/');
+      return null;
+    }
+    return { Authorization: `Bearer ${token}` };
+  };
+
+  const handleAuthError = (err) => {
+    if (err?.response?.status === 401) {
+      clearSession();
+      navigate('/');
+      return true;
+    }
+    return false;
+  };
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('theme', theme);
@@ -132,8 +152,10 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const headers = { Authorization: `Bearer ${token}` };
+        const headers = getAuthHeaders();
+        if (!headers) {
+          return;
+        }
         const [dashboardRes, appsRes, domainsRes, managerRes, employeeRes, shiftRes, projectRes] = await Promise.all([
           axios.get(`${API_BASE}/api/dashboard/admin`, { headers }),
           axios.get(`${API_BASE}/api/analytics/top-apps`, { headers }),
@@ -152,6 +174,9 @@ export default function Dashboard() {
         setShiftSummary(shiftRes.data.rows || []);
         setProjectSummary(projectRes.data.rows || []);
       } catch (err) {
+        if (handleAuthError(err)) {
+          return;
+        }
         console.error('Failed to fetch dashboard data', err);
       }
     };
@@ -163,11 +188,16 @@ export default function Dashboard() {
   const fetchRules = async () => {
     try {
       setRulesLoading(true);
-      const token = localStorage.getItem('token');
-      const headers = { Authorization: `Bearer ${token}` };
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
       const res = await axios.get(`${API_BASE}/api/rules`, { headers });
       setRules(res.data.items || []);
     } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
       console.error('Failed to fetch rules', err);
       setRules([]);
     } finally {
@@ -178,8 +208,10 @@ export default function Dashboard() {
   const fetchGroups = async () => {
     try {
       setGroupsLoading(true);
-      const token = localStorage.getItem('token');
-      const headers = { Authorization: `Bearer ${token}` };
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
       const [groupsRes, optionsRes] = await Promise.all([
         axios.get(`${API_BASE}/api/groups`, { headers }),
         axios.get(`${API_BASE}/api/groups/options`, { headers }),
@@ -187,6 +219,9 @@ export default function Dashboard() {
       setGroups(groupsRes.data.items || []);
       setGroupOptions(optionsRes.data || { users: [], managers: [], projects: [], departments: [] });
     } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
       console.error('Failed to fetch groups', err);
       setGroups([]);
     } finally {
@@ -196,12 +231,18 @@ export default function Dashboard() {
 
   const fetchPendingAgents = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
       const res = await axios.get(`${API_BASE}/api/agents/pending`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
       });
       setPendingAgents(res.data || []);
     } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
       console.error('Failed to fetch pending agents', err);
     }
   };
@@ -222,12 +263,18 @@ export default function Dashboard() {
 
   const decideAgent = async (requestId, action) => {
     try {
-      const token = localStorage.getItem('token');
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
       await axios.post(`${API_BASE}/api/agents/${requestId}/${action}`, {}, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
       });
       fetchPendingAgents();
     } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
       console.error(`Failed to ${action} agent`, err);
     }
   };
@@ -253,9 +300,12 @@ export default function Dashboard() {
   const createRule = async (event) => {
     event.preventDefault();
     try {
-      const token = localStorage.getItem('token');
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
       await axios.post(`${API_BASE}/api/rules`, ruleForm, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
       });
       setRuleForm({
         app_name: '',
@@ -265,18 +315,27 @@ export default function Dashboard() {
       });
       fetchRules();
     } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
       console.error('Failed to create rule', err);
     }
   };
 
   const removeRule = async (ruleId) => {
     try {
-      const token = localStorage.getItem('token');
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
       await axios.delete(`${API_BASE}/api/rules/${ruleId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
       });
       fetchRules();
     } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
       console.error('Failed to delete rule', err);
     }
   };
@@ -331,8 +390,10 @@ export default function Dashboard() {
   const createGroup = async (event) => {
     event.preventDefault();
     try {
-      const token = localStorage.getItem('token');
-      const headers = { Authorization: `Bearer ${token}` };
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
       const payload = {
         name: groupForm.name,
         category_name: groupForm.category_name,
@@ -359,18 +420,27 @@ export default function Dashboard() {
       resetGroupForm();
       fetchGroups();
     } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
       console.error('Failed to create group', err);
     }
   };
 
   const deleteGroup = async (groupId) => {
     try {
-      const token = localStorage.getItem('token');
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
       await axios.delete(`${API_BASE}/api/groups/${groupId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
       });
       fetchGroups();
     } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
       console.error('Failed to delete group', err);
     }
   };
