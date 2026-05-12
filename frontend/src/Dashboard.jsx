@@ -49,15 +49,53 @@ import { clearSession, isTokenValid } from './auth';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5002';
 const COLORS = ['#2563eb', '#059669', '#f59e0b', '#dc2626', '#7c3aed', '#0891b2'];
+const ANALYTICS_COLORS = {
+  productive: '#2563eb',
+  unproductive: '#059669',
+  ideal: '#f59e0b',
+};
 
 function secondsToHours(seconds) {
-  return `${(seconds / 3600).toFixed(1)}h`;
+  const totalSeconds = Math.max(0, Number(seconds) || 0);
+  if (totalSeconds < 60) {
+    return `${Math.round(totalSeconds)}s`;
+  }
+  if (totalSeconds < 3600) {
+    const minutes = Math.max(1, Math.round(totalSeconds / 60));
+    return `${minutes}m`;
+  }
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.round((totalSeconds % 3600) / 60);
+  return `${hours}h ${String(minutes).padStart(2, '0')}m`;
 }
 
 function scoreTone(score) {
   if (score >= 85) return 'good';
   if (score >= 75) return 'warn';
   return 'risk';
+}
+
+function analyticsCategory(category) {
+  if (category === 'ideal' || category === 'idle') return 'ideal';
+  if (category === 'unproductive' || category === 'prohibited') return 'unproductive';
+  return 'productive';
+}
+
+function categoryLabel(category) {
+  const normalized = analyticsCategory(category);
+  if (normalized === 'ideal') return 'Ideal';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function formatIstDateTime(value) {
+  if (!value) return '-';
+  const text = String(value).trim();
+  const cleaned = text.replace('T', ' ').replace('Z', '').replace(/\.\d+$/, '');
+  const [datePart, timePart = ''] = cleaned.split(' ');
+  const [year, month, day] = (datePart || '').split('-');
+  const clock = timePart.slice(0, 8) || timePart;
+  if (!year || !month || !day) return `${cleaned} IST`;
+  return `${day}/${month}/${year}${clock ? `, ${clock}` : ''} IST`;
 }
 
 function createGroupMemberDraft(index = 0) {
@@ -111,6 +149,36 @@ function blankShiftForm() {
   };
 }
 
+function blankProjectForm() {
+  return {
+    name: '',
+    client_name: '',
+    description: '',
+    status: 'active',
+    manager_id: '',
+  };
+}
+
+function blankProjectTaskForm() {
+  return {
+    title: '',
+    description: '',
+    assignee_type: 'group',
+    assignee_id: '',
+    due_at: '',
+    status: 'todo',
+  };
+}
+
+function blankProjectRuleForm() {
+  return {
+    app_name: '',
+    domain: '',
+    category: 'productive',
+    severity: 'medium',
+  };
+}
+
 function employeeFormFromRecord(employee) {
   return {
     agent_id: '',
@@ -156,8 +224,18 @@ export default function Dashboard() {
   const [productivityData, setProductivityData] = useState([]);
   const [appUsageData, setAppUsageData] = useState([]);
   const [topDomains, setTopDomains] = useState([]);
+  const [sessionEvents, setSessionEvents] = useState([]);
+  const [applicationActivity, setApplicationActivity] = useState([]);
+  const [browserActivity, setBrowserActivity] = useState([]);
+  const [activityRollup, setActivityRollup] = useState([]);
+  const [analyticsGroupBy, setAnalyticsGroupBy] = useState('employee');
+  const [analyticsSource, setAnalyticsSource] = useState('application');
+  const [detailedSessionTab, setDetailedSessionTab] = useState('applications');
   const [managerSummary, setManagerSummary] = useState([]);
   const [employeeSummary, setEmployeeSummary] = useState([]);
+  const [employeeProductivityReport, setEmployeeProductivityReport] = useState([]);
+  const [employeeReportGroupBy, setEmployeeReportGroupBy] = useState('project');
+  const [idleTimeReport, setIdleTimeReport] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [pendingEmployeeAgents, setPendingEmployeeAgents] = useState([]);
   const [employeeFilters, setEmployeeFilters] = useState({
@@ -178,6 +256,15 @@ export default function Dashboard() {
   const [editingShiftId, setEditingShiftId] = useState(null);
   const [shiftSummary, setShiftSummary] = useState([]);
   const [projectSummary, setProjectSummary] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [dashboardProjectId, setDashboardProjectId] = useState('');
+  const [taskProjectId, setTaskProjectId] = useState('');
+  const [projectDashboard, setProjectDashboard] = useState(null);
+  const [taskProjectDashboard, setTaskProjectDashboard] = useState(null);
+  const [projectForm, setProjectForm] = useState(blankProjectForm());
+  const [projectTaskForm, setProjectTaskForm] = useState(blankProjectTaskForm());
+  const [projectRuleForm, setProjectRuleForm] = useState(blankProjectRuleForm());
   const [groups, setGroups] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [groupOptions, setGroupOptions] = useState({ users: [], managers: [], projects: [], departments: [] });
@@ -188,7 +275,7 @@ export default function Dashboard() {
     parent_group_id: '',
     leader_user_id: '',
     leader_title: '',
-    members: [createGroupMemberDraft()],
+    members: [],
   });
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [expandedGroupIds, setExpandedGroupIds] = useState([]);
@@ -222,6 +309,48 @@ export default function Dashboard() {
   const editableParentGroups = useMemo(() => (
     groups.filter((group) => group.id !== editingGroupId)
   ), [groups, editingGroupId]);
+
+  const dashboardProject = useMemo(() => (
+    projects.find((project) => String(project.id) === String(dashboardProjectId)) || null
+  ), [projects, dashboardProjectId]);
+
+  const taskProject = useMemo(() => (
+    projects.find((project) => String(project.id) === String(taskProjectId)) || null
+  ), [projects, taskProjectId]);
+
+  const projectScopedRules = useMemo(() => (
+    rules.filter((rule) => String(rule.project_id || '') === String(dashboardProjectId || ''))
+  ), [rules, dashboardProjectId]);
+
+  const projectTaskAssigneeOptions = useMemo(() => {
+    if (projectTaskForm.assignee_type === 'manager') return groupOptions.managers || [];
+    if (projectTaskForm.assignee_type === 'employee') return groupOptions.users || [];
+    return groups.map((group) => ({ id: `group:${group.id}`, label: group.name, ref_id: group.id }));
+  }, [projectTaskForm.assignee_type, groupOptions.managers, groupOptions.users, groups]);
+
+  const analyticsTotals = useMemo(() => (
+    activityRollup.reduce((acc, row) => ({
+      productive: acc.productive + Number(row.productive_seconds || 0),
+      unproductive: acc.unproductive + Number(row.unproductive_seconds || 0),
+      ideal: acc.ideal + Number(row.idle_seconds || 0),
+      total: acc.total + Number(row.total_seconds || 0),
+    }), { productive: 0, unproductive: 0, ideal: 0, total: 0 })
+  ), [activityRollup]);
+
+  const analyticsPie = useMemo(() => [
+    { name: 'Productive', value: analyticsTotals.productive },
+    { name: 'Unproductive', value: analyticsTotals.unproductive },
+    { name: 'Ideal', value: analyticsTotals.ideal },
+  ].filter((row) => row.value > 0), [analyticsTotals]);
+
+  const rollupChartData = useMemo(() => (
+    activityRollup.slice(0, 8).map((row) => ({
+      name: row.group_name,
+      productive: Math.round((row.productive_seconds || 0) / 60),
+      unproductive: Math.round((row.unproductive_seconds || 0) / 60),
+      ideal: Math.round((row.idle_seconds || 0) / 60),
+    }))
+  ), [activityRollup]);
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
@@ -266,10 +395,11 @@ export default function Dashboard() {
         if (!headers) {
           return;
         }
-        const [dashboardRes, appsRes, domainsRes, managerRes, employeeRes, shiftRes, projectRes] = await Promise.all([
+        const [dashboardRes, appsRes, domainsRes, sessionsRes, managerRes, employeeRes, shiftRes, projectRes] = await Promise.all([
           axios.get(`${API_BASE}/api/dashboard/admin`, { headers }),
           axios.get(`${API_BASE}/api/analytics/top-apps`, { headers }),
           axios.get(`${API_BASE}/api/analytics/top-domains`, { headers }),
+          axios.get(`${API_BASE}/api/analytics/session-events`, { headers }),
           axios.get(`${API_BASE}/api/reports/productivity-summary`, { headers, params: { group_by: 'manager' } }),
           axios.get(`${API_BASE}/api/reports/productivity-summary`, { headers, params: { group_by: 'employee' } }),
           axios.get(`${API_BASE}/api/reports/productivity-summary`, { headers, params: { group_by: 'shift' } }),
@@ -279,6 +409,7 @@ export default function Dashboard() {
         setProductivityData(dashboardRes.data.productivity_data || []);
         setAppUsageData(appsRes.data.items || []);
         setTopDomains(domainsRes.data.items || []);
+        setSessionEvents(sessionsRes.data.items || []);
         setManagerSummary(managerRes.data.rows || []);
         setEmployeeSummary(employeeRes.data.rows || []);
         setShiftSummary(shiftRes.data.rows || []);
@@ -294,6 +425,77 @@ export default function Dashboard() {
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const fetchDetailedAnalytics = async () => {
+    try {
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      const [appActivityRes, browserActivityRes, rollupRes] = await Promise.all([
+        axios.get(`${API_BASE}/api/analytics/application-activity`, { headers, params: { limit: 100 } }),
+        axios.get(`${API_BASE}/api/analytics/browser-activity`, { headers, params: { limit: 100 } }),
+        axios.get(`${API_BASE}/api/analytics/activity-rollup`, {
+          headers,
+          params: {
+            group_by: analyticsGroupBy,
+            source: analyticsSource,
+            limit: 100,
+          },
+        }),
+      ]);
+      setApplicationActivity(appActivityRes.data.items || []);
+      setBrowserActivity(browserActivityRes.data.items || []);
+      setActivityRollup(rollupRes.data.items || []);
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to fetch detailed analytics', err);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'analytics') {
+      return undefined;
+    }
+    fetchDetailedAnalytics();
+    const interval = setInterval(fetchDetailedAnalytics, 10000);
+    return () => clearInterval(interval);
+  }, [activeTab, analyticsGroupBy, analyticsSource]);
+
+  const fetchEmployeeProductivityReport = async () => {
+    try {
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      const [summaryRes, idleRes] = await Promise.all([
+        axios.get(`${API_BASE}/api/reports/employee-productivity-summary`, {
+          headers,
+          params: { group_by: employeeReportGroupBy },
+        }),
+        axios.get(`${API_BASE}/api/reports/idle-time`, { headers }),
+      ]);
+      const res = summaryRes;
+      setEmployeeProductivityReport(res.data.rows || []);
+      setIdleTimeReport(idleRes.data.rows || []);
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to fetch employee productivity report', err);
+      setEmployeeProductivityReport([]);
+      setIdleTimeReport([]);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'reports') {
+      return;
+    }
+    fetchEmployeeProductivityReport();
+  }, [activeTab, employeeReportGroupBy]);
 
   const fetchRules = async () => {
     try {
@@ -336,6 +538,63 @@ export default function Dashboard() {
       setGroups([]);
     } finally {
       setGroupsLoading(false);
+    }
+  };
+
+  const fetchProjects = async () => {
+    try {
+      setProjectsLoading(true);
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      const res = await axios.get(`${API_BASE}/api/projects`, { headers });
+      const items = res.data.items || [];
+      setProjects(items);
+      const firstProjectId = items[0]?.id ? String(items[0].id) : '';
+      setDashboardProjectId((current) => current || firstProjectId);
+      setTaskProjectId((current) => current || firstProjectId);
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to fetch projects', err);
+      setProjects([]);
+    } finally {
+      setProjectsLoading(false);
+    }
+  };
+
+  const fetchProjectDashboard = async (projectId = dashboardProjectId, target = 'dashboard') => {
+    if (!projectId) {
+      if (target === 'task') {
+        setTaskProjectDashboard(null);
+      } else {
+        setProjectDashboard(null);
+      }
+      return;
+    }
+    try {
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      const res = await axios.get(`${API_BASE}/api/projects/${projectId}/dashboard`, { headers });
+      if (target === 'task') {
+        setTaskProjectDashboard(res.data);
+      } else {
+        setProjectDashboard(res.data);
+      }
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to fetch project dashboard', err);
+      if (target === 'task') {
+        setTaskProjectDashboard(null);
+      } else {
+        setProjectDashboard(null);
+      }
     }
   };
 
@@ -410,6 +669,18 @@ export default function Dashboard() {
   useEffect(() => {
     fetchGroups();
   }, []);
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  useEffect(() => {
+    fetchProjectDashboard(dashboardProjectId, 'dashboard');
+  }, [dashboardProjectId]);
+
+  useEffect(() => {
+    fetchProjectDashboard(taskProjectId, 'task');
+  }, [taskProjectId]);
 
   useEffect(() => {
     fetchEmployeeDirectory();
@@ -495,6 +766,132 @@ export default function Dashboard() {
     }
   };
 
+  const handleProjectFormChange = (event) => {
+    const { name, value } = event.target;
+    setProjectForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const createProject = async (event) => {
+    event.preventDefault();
+    try {
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      const payload = {
+        ...projectForm,
+        manager_id: projectForm.manager_id ? Number(projectForm.manager_id) : null,
+      };
+      const res = await axios.post(`${API_BASE}/api/projects`, payload, { headers });
+      setProjectForm(blankProjectForm());
+      setDashboardProjectId((current) => current || String(res.data.id));
+      setTaskProjectId((current) => current || String(res.data.id));
+      fetchProjects();
+      fetchGroups();
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to create project', err);
+    }
+  };
+
+  const handleProjectTaskChange = (event) => {
+    const { name, value } = event.target;
+    setProjectTaskForm((current) => ({
+      ...current,
+      [name]: value,
+      ...(name === 'assignee_type' ? { assignee_id: '' } : {}),
+    }));
+  };
+
+  const createProjectTask = async (event) => {
+    event.preventDefault();
+    if (!taskProjectId) {
+      return;
+    }
+    try {
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      const targetId = projectTaskForm.assignee_id ? Number(projectTaskForm.assignee_id) : null;
+      const payload = {
+        title: projectTaskForm.title,
+        description: projectTaskForm.description || null,
+        assignee_type: projectTaskForm.assignee_type,
+        group_id: projectTaskForm.assignee_type === 'group' ? targetId : null,
+        manager_user_id: projectTaskForm.assignee_type === 'manager' ? targetId : null,
+        employee_user_id: projectTaskForm.assignee_type === 'employee' ? targetId : null,
+        due_at: projectTaskForm.due_at || null,
+        status: projectTaskForm.status,
+      };
+      await axios.post(`${API_BASE}/api/projects/${taskProjectId}/tasks`, payload, { headers });
+      setProjectTaskForm(blankProjectTaskForm());
+      fetchProjectDashboard(taskProjectId, 'task');
+      if (String(taskProjectId) === String(dashboardProjectId)) {
+        fetchProjectDashboard(dashboardProjectId, 'dashboard');
+      }
+      fetchProjects();
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to create project task', err);
+    }
+  };
+
+  const updateProjectTaskStatus = async (task, nextStatus) => {
+    try {
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      await axios.put(`${API_BASE}/api/projects/${task.project_id}/tasks/${task.id}`, { status: nextStatus }, { headers });
+      if (String(task.project_id) === String(taskProjectId)) {
+        fetchProjectDashboard(task.project_id, 'task');
+      }
+      if (String(task.project_id) === String(dashboardProjectId)) {
+        fetchProjectDashboard(task.project_id, 'dashboard');
+      }
+      fetchProjects();
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to update project task', err);
+    }
+  };
+
+  const handleProjectRuleChange = (event) => {
+    const { name, value } = event.target;
+    setProjectRuleForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const createProjectRule = async (event) => {
+    event.preventDefault();
+    if (!dashboardProjectId) {
+      return;
+    }
+    try {
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      await axios.post(`${API_BASE}/api/rules`, {
+        ...projectRuleForm,
+        project_id: Number(dashboardProjectId),
+      }, { headers });
+      setProjectRuleForm(blankProjectRuleForm());
+      fetchRules();
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to create project rule', err);
+    }
+  };
+
   const handleGroupFormChange = (event) => {
     const { name, value } = event.target;
     setGroupForm((current) => ({ ...current, [name]: value }));
@@ -564,7 +961,9 @@ export default function Dashboard() {
         parent_group_id: groupForm.parent_group_id ? Number(groupForm.parent_group_id) : null,
         leader_user_id: groupForm.leader_user_id ? Number(groupForm.leader_user_id) : null,
         leader_title: groupForm.leader_title || null,
-        members: groupForm.members.map((member, index) => ({
+        members: groupForm.members
+          .filter((member) => member.member_type === 'department' ? member.department_name : member.ref_id)
+          .map((member, index) => ({
           client_key: member.client_key,
           parent_client_key: member.parent_client_key || null,
           member_type: member.member_type,
@@ -640,7 +1039,7 @@ export default function Dashboard() {
       parent_group_id: '',
       leader_user_id: '',
       leader_title: '',
-      members: [createGroupMemberDraft()],
+      members: [],
     });
   };
 
@@ -839,6 +1238,7 @@ export default function Dashboard() {
   const nav = [
     ['overview', LayoutDashboard, 'Overview'],
     ['groups', FolderTree, 'Groups'],
+    ['projects', Briefcase, 'Projects'],
     ['managers', Users, 'Managers'],
     ['employees', Activity, 'Employees'],
     ['analytics', BarChart3, 'Analytics'],
@@ -971,7 +1371,7 @@ export default function Dashboard() {
               <small>{productiveScore}% coverage</small>
             </div>
 
-            <div className="panel wide">
+            <div className="panel full">
               <PanelHeader icon={BarChart3} title="Productivity Trend" action="Live" />
               {productivityData.length ? (
                 <div className="chart-lg">
@@ -995,6 +1395,22 @@ export default function Dashboard() {
             </div>
 
             <div className="panel">
+              <PanelHeader icon={LogOut} title="Login / Logout Trail" action="Recent" />
+              <DataTable
+                columns={['Employee', 'Event', 'Time']}
+                rows={sessionEvents.slice(0, 6).map((row) => [
+                  <div className="stacked-cell">
+                    <strong>{row.employee_name}</strong>
+                    <small>{row.department || row.project_name || row.username}</small>
+                  </div>,
+                  <span className={`status-pill session-${row.event_type}`}>{row.event_type}</span>,
+                  formatIstDateTime(row.captured_at),
+                ])}
+                emptyMessage="No login or logout events captured yet."
+              />
+            </div>
+
+            <div className="panel">
               <PanelHeader icon={Activity} title="Top Applications" action="Top 10" />
               {appChart.length ? (
                 <>
@@ -1013,7 +1429,7 @@ export default function Dashboard() {
               ) : <EmptyState message="No live application usage data yet." />}
             </div>
 
-            <div className="panel wide">
+            <div className="panel full">
               <PanelHeader icon={Building2} title="Project Performance" action="Live summary" />
               <DataTable
                 columns={['Project', 'Employees', 'Productive', 'Active', 'Idle', 'Productivity %']}
@@ -1118,61 +1534,65 @@ export default function Dashboard() {
                   </div>
 
                   <div className="group-member-stack">
-                    {groupForm.members.map((member, index) => (
-                      <div className="group-member-row" key={member.client_key}>
-                        <div className="group-member-grid">
-                          <label>
-                            <span>Type</span>
-                            <select className="input-field" value={member.member_type} onChange={(event) => handleGroupMemberChange(member.client_key, 'member_type', event.target.value)}>
-                              <option value="user">User</option>
-                              <option value="manager">Manager team</option>
-                              <option value="project">Project team</option>
-                              <option value="department">Department</option>
-                            </select>
-                          </label>
-                          <label>
-                            <span>Target</span>
-                            <select
-                              className="input-field"
-                              value={member.member_type === 'department' ? member.department_name : member.ref_id}
-                              onChange={(event) => handleGroupMemberChange(
-                                member.client_key,
-                                member.member_type === 'department' ? 'department_name' : 'ref_id',
-                                event.target.value,
-                              )}
-                            >
-                              <option value="">Select</option>
-                              {memberOptions(groupOptions, member.member_type).map((option) => (
-                                <option key={option.id} value={option.department_name || option.ref_id}>{option.label}</option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            <span>Parent</span>
-                            <select className="input-field" value={member.parent_client_key} onChange={(event) => handleGroupMemberChange(member.client_key, 'parent_client_key', event.target.value)}>
-                              <option value="">Root node</option>
-                              {groupForm.members
-                                .filter((candidate) => candidate.client_key !== member.client_key)
-                                .map((candidate, candidateIndex) => (
-                                  <option key={candidate.client_key} value={candidate.client_key}>
-                                    {candidate.label_override || `${candidate.member_type} ${candidateIndex + 1}`}
-                                  </option>
+                    {groupForm.members.length ? (
+                      groupForm.members.map((member, index) => (
+                        <div className="group-member-row" key={member.client_key}>
+                          <div className="group-member-grid">
+                            <label>
+                              <span>Type</span>
+                              <select className="input-field" value={member.member_type} onChange={(event) => handleGroupMemberChange(member.client_key, 'member_type', event.target.value)}>
+                                <option value="user">User</option>
+                                <option value="manager">Manager team</option>
+                                <option value="project">Project team</option>
+                                <option value="department">Department</option>
+                              </select>
+                            </label>
+                            <label>
+                              <span>Target</span>
+                              <select
+                                className="input-field"
+                                value={member.member_type === 'department' ? member.department_name : member.ref_id}
+                                onChange={(event) => handleGroupMemberChange(
+                                  member.client_key,
+                                  member.member_type === 'department' ? 'department_name' : 'ref_id',
+                                  event.target.value,
+                                )}
+                              >
+                                <option value="">Select</option>
+                                {memberOptions(groupOptions, member.member_type).map((option) => (
+                                  <option key={option.id} value={option.department_name || option.ref_id}>{option.label}</option>
                                 ))}
-                            </select>
-                          </label>
-                          <label>
-                            <span>Custom label</span>
-                            <input className="input-field" value={member.label_override} onChange={(event) => handleGroupMemberChange(member.client_key, 'label_override', event.target.value)} placeholder="Optional display label" />
-                          </label>
+                              </select>
+                            </label>
+                            <label>
+                              <span>Parent</span>
+                              <select className="input-field" value={member.parent_client_key} onChange={(event) => handleGroupMemberChange(member.client_key, 'parent_client_key', event.target.value)}>
+                                <option value="">Root node</option>
+                                {groupForm.members
+                                  .filter((candidate) => candidate.client_key !== member.client_key)
+                                  .map((candidate, candidateIndex) => (
+                                    <option key={candidate.client_key} value={candidate.client_key}>
+                                      {candidate.label_override || `${candidate.member_type} ${candidateIndex + 1}`}
+                                    </option>
+                                  ))}
+                              </select>
+                            </label>
+                            <label>
+                              <span>Custom label</span>
+                              <input className="input-field" value={member.label_override} onChange={(event) => handleGroupMemberChange(member.client_key, 'label_override', event.target.value)} placeholder="Optional display label" />
+                            </label>
+                          </div>
+                          <div className="group-member-actions">
+                            <span>Node {index + 1}</span>
+                            <button type="button" className="table-action danger" onClick={() => removeGroupMember(member.client_key)} aria-label={`Remove member ${index + 1}`}>
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
                         </div>
-                        <div className="group-member-actions">
-                          <span>Node {index + 1}</span>
-                          <button type="button" className="table-action danger" onClick={() => removeGroupMember(member.client_key)} aria-label={`Remove member ${index + 1}`}>
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    ) : (
+                      <div className="empty-state compact">No members yet. Create the group first or add members later.</div>
+                    )}
                   </div>
 
                   <div className="group-builder-actions">
@@ -1265,6 +1685,237 @@ export default function Dashboard() {
                 </div>
               ) : <EmptyState message="No live custom group hierarchy exists yet." />}
             </div>
+          </section>
+        )}
+
+        {activeTab === 'projects' && (
+          <section className="page-grid">
+            <div className="panel full">
+              <PanelHeader icon={Briefcase} title="Project Control Center" action="Assignments and timelines" />
+              <div className="project-layout">
+                <form className="project-form" onSubmit={createProject}>
+                  <div className="group-form-grid">
+                    <label>
+                      <span>Project name</span>
+                      <input className="input-field" name="name" value={projectForm.name} onChange={handleProjectFormChange} placeholder="AI Operations Migration" required />
+                    </label>
+                    <label>
+                      <span>Client / owner</span>
+                      <input className="input-field" name="client_name" value={projectForm.client_name} onChange={handleProjectFormChange} placeholder="Internal, client name, business unit" />
+                    </label>
+                    <label>
+                      <span>Project manager</span>
+                      <select className="input-field" name="manager_id" value={projectForm.manager_id} onChange={handleProjectFormChange}>
+                        <option value="">No manager assigned</option>
+                        {groupOptions.users.map((option) => (
+                          <option key={option.id} value={option.ref_id}>{option.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Status</span>
+                      <select className="input-field" name="status" value={projectForm.status} onChange={handleProjectFormChange}>
+                        <option value="active">Active</option>
+                        <option value="paused">Paused</option>
+                        <option value="completed">Completed</option>
+                        <option value="archived">Archived</option>
+                      </select>
+                    </label>
+                    <label className="group-form-wide">
+                      <span>Description</span>
+                      <input className="input-field" name="description" value={projectForm.description} onChange={handleProjectFormChange} placeholder="Scope, delivery notes, or success criteria" />
+                    </label>
+                  </div>
+                  <div className="group-builder-actions">
+                    <button className="btn btn-primary" type="submit">
+                      <Plus size={16} />
+                      Create project
+                    </button>
+                  </div>
+                </form>
+
+                <DataTable
+                  columns={['Project', 'Manager', 'Status', 'Employees', 'Open tasks', 'Productive', 'Idle', 'Productivity %']}
+                  rows={projects.map((project) => [
+                    <div className="stacked-cell">
+                      <strong>{project.name}</strong>
+                      <small>{project.client_name || project.description || 'No client set'}</small>
+                    </div>,
+                    project.manager_name || '-',
+                    <span className={`status-pill project-${project.status}`}>{project.status}</span>,
+                    project.summary.employee_count,
+                    `${project.summary.open_task_count} / ${project.summary.task_count}`,
+                    secondsToHours(project.summary.productive_seconds),
+                    secondsToHours(project.summary.idle_seconds),
+                    <span className={`score ${scoreTone(Math.round(project.summary.productivity_percent))}`}>{Math.round(project.summary.productivity_percent)}</span>,
+                  ])}
+                  emptyMessage={projectsLoading ? 'Loading projects...' : 'No projects created yet.'}
+                />
+              </div>
+            </div>
+
+            <div className="panel full">
+              <PanelHeader icon={BarChart3} title="Project Dashboard" action={dashboardProject?.name || 'Select a project'} />
+              {dashboardProject && projectDashboard ? (
+                <div className="project-dashboard">
+                  <div className="project-selector-row">
+                    <select className="input-field" value={dashboardProjectId} onChange={(event) => setDashboardProjectId(event.target.value)}>
+                      {projects.map((project) => (
+                        <option key={project.id} value={project.id}>{project.name}</option>
+                      ))}
+                    </select>
+                    <div className="project-kpi-strip">
+                      <span>{projectDashboard.project.summary.employee_count} employees</span>
+                      <span>{projectDashboard.project.summary.open_task_count} open tasks</span>
+                      <span>{secondsToHours(projectDashboard.project.summary.productive_seconds)} productive</span>
+                      <span>{Math.round(projectDashboard.project.summary.productivity_percent)}% score</span>
+                    </div>
+                  </div>
+
+                  <div className="project-dashboard-stack">
+                    <div>
+                      <PanelHeader icon={Users} title="Manager Rollup" action="Drilldown" />
+                      <DataTable
+                        columns={['Manager', 'Employees', 'Productive', 'Unproductive', 'Idle', 'Productivity %']}
+                        rows={projectDashboard.manager_rows.map((row) => [
+                          row.name,
+                          row.employee_count,
+                          secondsToHours(row.productive_seconds),
+                          secondsToHours(row.unproductive_seconds),
+                          secondsToHours(row.idle_seconds),
+                          <span className={`score ${scoreTone(Math.round(row.productivity_percent))}`}>{Math.round(row.productivity_percent)}</span>,
+                        ])}
+                        emptyMessage="No manager-wise activity for this project yet."
+                      />
+                    </div>
+                    <div>
+                      <PanelHeader icon={User} title="Employee Drilldown" action="Per person" />
+                      <DataTable
+                        columns={['Employee', 'Productive', 'Unproductive', 'Idle', 'Productivity %']}
+                        rows={projectDashboard.employee_rows.map((row) => [
+                          row.name,
+                          secondsToHours(row.productive_seconds),
+                          secondsToHours(row.unproductive_seconds),
+                          secondsToHours(row.idle_seconds),
+                          <span className={`score ${scoreTone(Math.round(row.productivity_percent))}`}>{Math.round(row.productivity_percent)}</span>,
+                        ])}
+                        emptyMessage="No employee activity for this project yet."
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <EmptyState message="Select or create a project to view manager and employee drilldowns." />
+              )}
+            </div>
+
+            <div className="panel full task-assignment-panel">
+              <PanelHeader icon={CalendarDays} title="Task Assignment" action="Group, manager, or employee" />
+              {taskProject ? (
+                <div className="task-workbench">
+                  <div className="project-selector-row task-project-selector">
+                    <label>
+                      <span>Project</span>
+                      <select className="input-field" value={taskProjectId} onChange={(event) => setTaskProjectId(event.target.value)}>
+                        {projects.map((project) => (
+                          <option key={project.id} value={project.id}>{project.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="project-kpi-strip">
+                      <span>{taskProjectDashboard?.project?.summary?.open_task_count || 0} open tasks</span>
+                      <span>{taskProjectDashboard?.project?.summary?.employee_count || 0} people in scope</span>
+                    </div>
+                  </div>
+                  <form className="task-composer" onSubmit={createProjectTask}>
+                    <div className="task-composer-head">
+                      <div>
+                        <strong>Create assignment</strong>
+                        <small>{taskProject.name}</small>
+                      </div>
+                    </div>
+                    <div className="task-form-grid">
+                      <label className="task-title-field">
+                        <span>Task</span>
+                        <input className="input-field" name="title" value={projectTaskForm.title} onChange={handleProjectTaskChange} placeholder="Complete endpoint validation" required />
+                      </label>
+                      <label>
+                        <span>Assign to</span>
+                        <select className="input-field" name="assignee_type" value={projectTaskForm.assignee_type} onChange={handleProjectTaskChange}>
+                          <option value="group">Group</option>
+                          <option value="manager">Manager</option>
+                          <option value="employee">Employee</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Assignee</span>
+                        <select className="input-field" name="assignee_id" value={projectTaskForm.assignee_id} onChange={handleProjectTaskChange} required>
+                          <option value="">Select assignee</option>
+                          {projectTaskAssigneeOptions.map((option) => (
+                            <option key={option.id} value={option.ref_id}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <span>Due timeline</span>
+                        <input className="input-field" type="datetime-local" name="due_at" value={projectTaskForm.due_at} onChange={handleProjectTaskChange} />
+                      </label>
+                      <label>
+                        <span>Status</span>
+                        <select className="input-field" name="status" value={projectTaskForm.status} onChange={handleProjectTaskChange}>
+                          <option value="todo">To do</option>
+                          <option value="in_progress">In progress</option>
+                          <option value="blocked">Blocked</option>
+                          <option value="completed">Completed</option>
+                        </select>
+                      </label>
+                      <label className="task-description-field">
+                        <span>Description</span>
+                        <input className="input-field" name="description" value={projectTaskForm.description} onChange={handleProjectTaskChange} placeholder="Acceptance criteria or delivery notes" />
+                      </label>
+                      <div className="task-submit-cell">
+                        <button className="btn btn-primary" type="submit">
+                          <Plus size={16} />
+                          Assign task
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+
+                  <div className="task-board">
+                    <div className="task-board-head">
+                      <div>
+                        <strong>Assigned work</strong>
+                        <small>Timeline, owner, and live status</small>
+                      </div>
+                      <span className="status-pill">{taskProjectDashboard?.tasks?.length || 0} tasks</span>
+                    </div>
+                    <DataTable
+                      columns={['Task', 'Assigned to', 'Due', 'Status', 'Update']}
+                      rows={(taskProjectDashboard?.tasks || []).map((task) => [
+                        <div className="stacked-cell">
+                          <strong>{task.title}</strong>
+                          <small>{task.description || task.assignee_type}</small>
+                        </div>,
+                        task.assignee_label,
+                        formatIstDateTime(task.due_at),
+                        <span className={`status-pill task-${task.status}`}>{task.status.replace('_', ' ')}</span>,
+                        <select className="input-field compact-select" value={task.status} onChange={(event) => updateProjectTaskStatus(task, event.target.value)}>
+                          <option value="todo">To do</option>
+                          <option value="in_progress">In progress</option>
+                          <option value="blocked">Blocked</option>
+                          <option value="completed">Completed</option>
+                        </select>,
+                      ])}
+                      emptyMessage="No tasks assigned to this project yet."
+                    />
+                  </div>
+                </div>
+              ) : (
+                <EmptyState message="Create a project before assigning tasks." />
+              )}
+            </div>
+
           </section>
         )}
 
@@ -1369,7 +2020,7 @@ export default function Dashboard() {
                       agent.username || '-',
                       `${agent.os_type}${agent.os_version ? ` ${agent.os_version}` : ''}`,
                       agent.ip_address || '-',
-                      agent.last_seen_at ? new Date(agent.last_seen_at).toLocaleString() : '-',
+                      formatIstDateTime(agent.last_seen_at),
                       <span className="status-pill">{agent.status}</span>,
                       <button className="btn btn-primary compact" onClick={() => startEmployeeFromAgent(agent)}>
                         <UserPlus size={15} />
@@ -1585,14 +2236,14 @@ export default function Dashboard() {
                         row.app_name || '-',
                         row.window_title || '-',
                         secondsToHours(row.duration),
-                        row.start_time ? new Date(row.start_time).toLocaleString() : '-',
+                        formatIstDateTime(row.start_time),
                       ])}
                       emptyMessage="No activity recorded for this employee yet."
                     />
                     <DataTable
                       columns={['When', 'Change', 'Field', 'Old', 'New', 'Changed by']}
                       rows={(employeeInsight.history || []).map((row) => [
-                        row.created_at ? new Date(row.created_at).toLocaleString() : '-',
+                        formatIstDateTime(row.created_at),
                         row.change_type,
                         row.field_name || '-',
                         row.old_value || '-',
@@ -1610,17 +2261,189 @@ export default function Dashboard() {
 
         {activeTab === 'analytics' && (
           <section className="page-grid">
+            <div className="metric-card accent-blue">
+              <span>Productive</span>
+              <strong>{secondsToHours(analyticsTotals.productive)}</strong>
+              <small>Selected analytics scope</small>
+            </div>
+            <div className="metric-card accent-red">
+              <span>Unproductive</span>
+              <strong>{secondsToHours(analyticsTotals.unproductive)}</strong>
+              <small>Rules and known distractions</small>
+            </div>
+            <div className="metric-card accent-amber">
+              <span>Ideal</span>
+              <strong>{secondsToHours(analyticsTotals.ideal)}</strong>
+              <small>No active work detected</small>
+            </div>
+            <div className="metric-card accent-green">
+              <span>Productivity</span>
+              <strong>{analyticsTotals.total ? Math.round((analyticsTotals.productive / analyticsTotals.total) * 100) : 0}%</strong>
+              <small>Productive / total tracked</small>
+            </div>
+
+            <div className="panel full">
+              <PanelHeader icon={BarChart3} title="Productivity Drilldown" action="Employee, manager, department, project" />
+              <div className="analytics-controls">
+                <label>
+                  <span>Group by</span>
+                  <select className="input-field" value={analyticsGroupBy} onChange={(event) => setAnalyticsGroupBy(event.target.value)}>
+                    <option value="employee">Employee</option>
+                    <option value="manager">Manager</option>
+                    <option value="department">Team / Department</option>
+                    <option value="project">Project</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Source</span>
+                  <select className="input-field" value={analyticsSource} onChange={(event) => setAnalyticsSource(event.target.value)}>
+                    <option value="application">Applications</option>
+                    <option value="browser">Browser URLs</option>
+                    <option value="all">Applications + URLs</option>
+                  </select>
+                </label>
+                <button className="btn btn-secondary" onClick={fetchDetailedAnalytics}>
+                  <RefreshCw size={16} />
+                  Refresh
+                </button>
+              </div>
+              <div className="analytics-chart-grid">
+                <div className="chart-card">
+                  <PanelHeader icon={BarChart3} title="Scope Comparison" action="Minutes" />
+                  {rollupChartData.length ? (
+                    <div className="chart-md">
+                      <ResponsiveContainer>
+                        <BarChart data={rollupChartData}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="name" />
+                          <YAxis />
+                          <Tooltip />
+                          <Bar dataKey="productive" fill={ANALYTICS_COLORS.productive} radius={[3, 3, 0, 0]} />
+                          <Bar dataKey="unproductive" fill={ANALYTICS_COLORS.unproductive} radius={[3, 3, 0, 0]} />
+                          <Bar dataKey="ideal" fill={ANALYTICS_COLORS.ideal} radius={[3, 3, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : <EmptyState message="No scope chart data yet." />}
+                </div>
+                <div className="chart-card">
+                  <PanelHeader icon={Activity} title="Work Mix" action="Live" />
+                  {analyticsPie.length ? (
+                    <div className="chart-md">
+                      <ResponsiveContainer>
+                        <PieChart>
+                          <Pie data={analyticsPie} dataKey="value" innerRadius={54} outerRadius={82} paddingAngle={3}>
+                            {analyticsPie.map((entry) => (
+                              <Cell key={entry.name} fill={ANALYTICS_COLORS[entry.name.toLowerCase()] || COLORS[0]} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value) => secondsToHours(value)} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : <EmptyState message="No work mix data yet." />}
+                  <LegendList rows={analyticsPie} />
+                </div>
+              </div>
+              <DataTable
+                columns={['Scope', 'Productive', 'Unproductive', 'Ideal', 'Total', 'Productivity %']}
+                rows={activityRollup.map((row) => [
+                  row.group_name,
+                  secondsToHours(row.productive_seconds),
+                  secondsToHours(row.unproductive_seconds),
+                  secondsToHours(row.idle_seconds),
+                  secondsToHours(row.total_seconds),
+                  <span className={`score ${scoreTone(Math.round(row.productivity_percent))}`}>{Math.round(row.productivity_percent)}</span>,
+                ])}
+                emptyMessage="No detailed productivity rollup available yet."
+              />
+            </div>
+
             <div className="panel wide">
               <PanelHeader icon={Activity} title="Application Analytics" action="Top usage" />
               <DataTable
                 columns={['Application', 'Duration', 'Category']}
-                rows={appChart.map((row) => [row.name, secondsToHours(row.value), row.category || 'Neutral'])}
+                rows={appChart.map((row) => [row.name, secondsToHours(row.value), categoryLabel(row.category)])}
                 emptyMessage="No live application analytics yet."
               />
             </div>
             <div className="panel">
               <PanelHeader icon={Building2} title="Top Domains" action="Top 10" />
-              {domainChart.length ? <LegendList rows={domainChart} /> : <EmptyState message="No live domain usage data yet." />}
+              <DataTable
+                columns={['Domain', 'Duration', 'Category']}
+                rows={domainChart.map((row) => [row.name, secondsToHours(row.value), categoryLabel(row.category)])}
+                emptyMessage="No live domain usage data yet."
+              />
+            </div>
+            <div className="panel full">
+              <PanelHeader icon={Activity} title="Detailed Application and URL Sessions" action="Open, close, duration" />
+              <div className="segmented-tabs detail-tabs">
+                <button className={detailedSessionTab === 'applications' ? 'active' : ''} onClick={() => setDetailedSessionTab('applications')}>
+                  <Activity size={15} />
+                  Applications
+                </button>
+                <button className={detailedSessionTab === 'urls' ? 'active' : ''} onClick={() => setDetailedSessionTab('urls')}>
+                  <Building2 size={15} />
+                  URLs
+                </button>
+              </div>
+              {detailedSessionTab === 'applications' ? (
+                <div className="fixed-table detailed-session-table">
+                  <DataTable
+                    columns={['Employee', 'Manager', 'Department', 'Project', 'Application', 'Window', 'Category', 'Opened', 'Closed', 'Duration']}
+                    rows={applicationActivity.map((row) => [
+                      row.employee_name,
+                      row.manager_name || '-',
+                      row.department || '-',
+                      row.project_name || '-',
+                      row.application || '-',
+                      <span className="truncate-cell app-window">{row.window_title || '-'}</span>,
+                      <span className={`status-pill analytics-${analyticsCategory(row.category)}`}>{categoryLabel(row.category)}</span>,
+                      formatIstDateTime(row.start_time),
+                      formatIstDateTime(row.end_time),
+                      secondsToHours(row.duration),
+                    ])}
+                    emptyMessage="No detailed application sessions captured yet."
+                  />
+                </div>
+              ) : (
+                <div className="fixed-table detailed-session-table">
+                  <DataTable
+                    columns={['Employee', 'Manager', 'Department', 'Project', 'Browser', 'Domain', 'URL', 'Category', 'Opened', 'Closed', 'Duration']}
+                    rows={browserActivity.map((row) => [
+                      row.employee_name,
+                      row.manager_name || '-',
+                      row.department || '-',
+                      row.project_name || '-',
+                      row.browser || row.application || '-',
+                      row.domain || '-',
+                      <span className="truncate-cell url-cell" title={row.url || ''}>{row.url || '-'}</span>,
+                      <span className={`status-pill analytics-${analyticsCategory(row.category)}`}>{categoryLabel(row.category)}</span>,
+                      formatIstDateTime(row.start_time),
+                      formatIstDateTime(row.end_time),
+                      secondsToHours(row.duration),
+                    ])}
+                    emptyMessage="No detailed browser URL sessions captured yet. Restart the updated agent and browse with Chrome, Edge, Brave, or Firefox."
+                  />
+                </div>
+              )}
+            </div>
+            <div className="panel full">
+              <PanelHeader icon={LogOut} title="Employee Session Events" action="Agent lifecycle" />
+              <div className="fixed-table session-events-table">
+                <DataTable
+                  columns={['Employee', 'Username', 'Department', 'Project', 'Event', 'Time']}
+                  rows={sessionEvents.map((row) => [
+                    <span className="truncate-cell employee-cell">{row.employee_name}</span>,
+                    row.username,
+                    row.department || '-',
+                    row.project_name || '-',
+                    <span className={`status-pill session-${row.event_type}`}>{row.event_type}</span>,
+                    formatIstDateTime(row.captured_at),
+                  ])}
+                  emptyMessage="No agent login or logout events captured yet."
+                />
+              </div>
             </div>
             <div className="panel full">
               <PanelHeader icon={BarChart3} title="Productivity Index Model" action="Pending" />
@@ -1632,8 +2455,57 @@ export default function Dashboard() {
         {activeTab === 'reports' && (
           <section className="page-grid">
             <div className="panel full">
-              <PanelHeader icon={FileSpreadsheet} title="Excel Reports" action="Timezone compatible" />
-              <EmptyState message="No live report export API is connected yet." />
+              <PanelHeader icon={FileSpreadsheet} title="Employee Productivity Summary Report" action="Project, manager, and shift" />
+              <div className="analytics-controls">
+                <label>
+                  <span>Group by</span>
+                  <select className="input-field" value={employeeReportGroupBy} onChange={(event) => setEmployeeReportGroupBy(event.target.value)}>
+                    <option value="project">Project</option>
+                    <option value="manager">Manager</option>
+                    <option value="shift">Shift</option>
+                  </select>
+                </label>
+                <button className="btn btn-secondary" onClick={fetchEmployeeProductivityReport}>
+                  <RefreshCw size={16} />
+                  Refresh
+                </button>
+              </div>
+              <div className="fixed-table session-events-table">
+                <DataTable
+                  columns={['Group', 'Employee', 'Username', 'Login', 'Logout', 'Active', 'Productive', 'Idle']}
+                  rows={employeeProductivityReport.map((row) => [
+                    row.group_name,
+                    row.employee_name,
+                    row.username,
+                    formatIstDateTime(row.login_time),
+                    formatIstDateTime(row.logout_time),
+                    secondsToHours(row.active_seconds),
+                    secondsToHours(row.productive_seconds),
+                    secondsToHours(row.idle_seconds),
+                  ])}
+                  emptyMessage="No employee productivity report data is available yet."
+                />
+              </div>
+            </div>
+            <div className="panel full">
+              <PanelHeader icon={Clock} title="Idle Time Break Report" action="Reason capture" />
+              <div className="fixed-table session-events-table">
+                <DataTable
+                  columns={['Employee', 'Project', 'Manager', 'Shift', 'Idle start', 'Idle end', 'Duration', 'Category', 'Reason']}
+                  rows={idleTimeReport.map((row) => [
+                    row.employee_name,
+                    row.project_name || '-',
+                    row.manager_name || '-',
+                    row.shift_name || '-',
+                    formatIstDateTime(row.start_time),
+                    formatIstDateTime(row.end_time),
+                    secondsToHours(row.duration),
+                    row.reason_category || 'Pending',
+                    row.reason || 'Pending employee reason',
+                  ])}
+                  emptyMessage="No idle time breaks have been captured yet."
+                />
+              </div>
             </div>
           </section>
         )}

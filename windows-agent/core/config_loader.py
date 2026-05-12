@@ -14,7 +14,7 @@ CONFIG_PATH = BASE_DIR / "config.json"
 AGENT_VERSION = "0.1.0"
 
 DEFAULT_CONFIG: dict[str, Any] = {
-    "server_url": "http://127.0.0.1:5000",
+    "server_url": "http://127.0.0.1:5002",
     "master_password": "InfraAgent@2026",
     "agent_id": None,
     "agent_token_id": "",
@@ -33,6 +33,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "batch_interval_seconds": 15,
     "queue_db_path": "agent_queue.sqlite3",
     "log_path": "agent.log",
+    "idle_reason_categories": [
+        "Lunch / meal break",
+        "Meeting",
+        "Phone call",
+        "Personal break",
+        "System issue",
+        "Other",
+    ],
 }
 
 

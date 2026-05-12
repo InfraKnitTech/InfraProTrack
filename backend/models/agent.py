@@ -1,8 +1,7 @@
-from datetime import datetime
-
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
+from core.time_utils import now_ist
 from database import Base
 
 
@@ -23,7 +22,7 @@ class AgentDevice(Base):
     token_hash = Column(String(128), nullable=False)
     security_key_hash = Column(String(128), nullable=False)
     last_seen_at = Column(DateTime, nullable=True)
-    registered_at = Column(DateTime, default=datetime.utcnow)
+    registered_at = Column(DateTime, default=now_ist)
     revoked_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
@@ -49,7 +48,7 @@ class AgentRegistrationRequest(Base):
     issued_token = Column(String(255), nullable=True)
     issued_security_key = Column(String(255), nullable=True)
     credentials_delivered_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)
     decided_at = Column(DateTime, nullable=True)
     decided_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
@@ -65,7 +64,7 @@ class AgentHeartbeat(Base):
     agent_id = Column(Integer, ForeignKey("agent_devices.id"), nullable=False, index=True)
     status = Column(String(30), default="online", nullable=False)
     captured_at = Column(DateTime, nullable=True)
-    received_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    received_at = Column(DateTime, default=now_ist, nullable=False)
     payload = Column(Text, nullable=True)
 
     agent = relationship("AgentDevice", back_populates="heartbeats")
@@ -80,7 +79,7 @@ class RawAgentEvent(Base):
     agent_id = Column(Integer, ForeignKey("agent_devices.id"), nullable=False, index=True)
     event_type = Column(String(50), nullable=False, index=True)
     captured_at = Column(DateTime, nullable=True, index=True)
-    received_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    received_at = Column(DateTime, default=now_ist, nullable=False)
     payload = Column(Text, nullable=False)
     normalized = Column(Boolean, default=False, nullable=False)
 
@@ -99,4 +98,4 @@ class FileUsage(Base):
     start_time = Column(DateTime, nullable=True)
     end_time = Column(DateTime, nullable=True)
     duration = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)

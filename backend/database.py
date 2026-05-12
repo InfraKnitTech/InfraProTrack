@@ -50,6 +50,7 @@ def create_all_tables():
     _ensure_group_columns()
     _ensure_employee_columns()
     _ensure_agent_columns()
+    _ensure_idle_columns()
     print("Database tables verified / created.")
 
 
@@ -105,3 +106,26 @@ def _ensure_agent_columns():
         return
     with engine.begin() as connection:
         connection.execute(text("ALTER TABLE agent_devices ADD COLUMN user_id INTEGER NULL"))
+
+
+def _ensure_idle_columns():
+    inspector = inspect(engine)
+    if "idle_logs" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("idle_logs")}
+    statements: list[str] = []
+    additions = {
+        "end_time": "DATETIME NULL",
+        "reason_category": "VARCHAR(160) NULL",
+        "project_id": "INTEGER NULL",
+        "manager_id": "INTEGER NULL",
+        "shift_id": "INTEGER NULL",
+    }
+    for column_name, definition in additions.items():
+        if column_name not in columns:
+            statements.append(f"ALTER TABLE idle_logs ADD COLUMN {column_name} {definition}")
+    if not statements:
+        return
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))

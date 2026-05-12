@@ -12,7 +12,8 @@ import uvicorn
 
 from core.config import server
 from database import create_all_tables, reset_connection_pool
-from routers import agents, analytics, auth, dashboard, employees, groups, reports, rules, shifts, telemetry
+from seed import seed_defaults
+from routers import agents, analytics, auth, dashboard, employees, groups, projects, reports, rules, shifts, telemetry
 
 
 @asynccontextmanager
@@ -20,6 +21,7 @@ async def lifespan(app: FastAPI):
     """On first run: check DB connection and create all tables if missing."""
     print("InfraProTrack API starting up...")
     create_all_tables()
+    seed_defaults()
     print(f"Ready at http://localhost:{server.PORT}")
     print(f"Swagger docs: http://localhost:{server.PORT}/docs")
     print(f"ReDoc:        http://localhost:{server.PORT}/redoc")
@@ -59,6 +61,7 @@ app.include_router(analytics.router)
 app.include_router(reports.router)
 app.include_router(rules.router)
 app.include_router(groups.router)
+app.include_router(projects.router)
 app.include_router(shifts.router)
 app.include_router(employees.router)
 

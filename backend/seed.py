@@ -4,16 +4,15 @@ Run once: python seed.py
 """
 from core.security import get_password_hash
 from database import SessionLocal, create_all_tables
-from models.manager import Manager
-from models.monitoring import AppRule
-from models.project import Project
-from models.shift import Shift
 from models.user import User
-from datetime import time
 
 
 def seed():
     create_all_tables()
+    seed_defaults()
+
+
+def seed_defaults():
     db = SessionLocal()
     try:
         admin_email = "admin@protrack.com"
@@ -37,95 +36,35 @@ def seed():
             admin.is_monitoring_subject = False
             print("Admin user already exists.")
 
-        day_shift = _ensure_shift(db, "India Day Shift", time(9, 30), time(18, 30), "Asia/Kolkata")
-        night_shift = _ensure_shift(db, "US Support Shift", time(20, 0), time(5, 0), "Asia/Kolkata", is_overnight=1)
-
-        manager = _ensure_user(
-            db,
-            username="manager",
-            full_name="Operations Manager",
-            email="manager@protrack.com",
-            password="manager123",
-            role="manager",
-            department="Delivery",
-            shift_id=day_shift.id,
-        )
-        if not db.query(Manager).filter(Manager.user_id == manager.id).first():
-            db.add(Manager(user_id=manager.id, department="Delivery", region="India"))
-
-        project = db.query(Project).filter(Project.name == "Productivity Operations").first()
-        if not project:
-            project = Project(
-                name="Productivity Operations",
-                description="Baseline production monitoring project",
-                client_name="Internal",
-                manager_id=manager.id,
-                status="active",
-            )
-            db.add(project)
-            db.flush()
-
-        for app_name, domain, category, severity in [
-            ("Visual Studio Code", None, "productive", "low"),
-            ("Microsoft Excel", None, "productive", "low"),
-            ("Microsoft Teams", None, "productive", "low"),
-            ("YouTube", "youtube.com", "unproductive", "medium"),
-            ("Games", None, "prohibited", "high"),
-        ]:
-            exists = db.query(AppRule).filter(
-                AppRule.app_name == app_name,
-                AppRule.domain == domain,
-            ).first()
-            if not exists:
-                db.add(AppRule(
-                    app_name=app_name,
-                    domain=domain,
-                    category=category,
-                    severity=severity,
-                    project_id=project.id,
-                    created_by=admin.id,
-                ))
+        _remove_default_records(db)
 
         db.commit()
-        print("Baseline shifts, project, admin, manager profile, and app rules verified.")
+        print("Default admin profile verified.")
         print("Admin login: admin / pass123")
     finally:
         db.close()
 
 
-def _ensure_shift(db, name, start_time, end_time, timezone, is_overnight=0):
-    shift = db.query(Shift).filter(Shift.name == name).first()
-    if shift:
-        return shift
-    shift = Shift(
-        name=name,
-        start_time=start_time,
-        end_time=end_time,
-        timezone=timezone,
-        is_overnight=is_overnight,
+def _remove_default_records(db):
+    db.query(User).filter(User.role == "manager", User.username == "manager").delete(synchronize_session=False)
+    db.query(User).filter(User.username == "manager").delete(synchronize_session=False)
+    db.query(User).filter(User.username == "admin").update(
+        {
+            User.full_name: "Admin User",
+            User.email: "admin@protrack.com",
+            User.department: "Operations",
+            User.is_monitoring_subject: False,
+        },
+        synchronize_session=False,
     )
-    db.add(shift)
-    db.flush()
-    return shift
 
+    from models.monitoring import AppRule
+    from models.project import Project
 
-def _ensure_user(db, username, full_name, email, password, role, department, **kwargs):
-    user = db.query(User).filter(User.email == email).first()
-    if user:
-        return user
-    user = User(
-        username=username,
-        full_name=full_name,
-        email=email,
-        password=get_password_hash(password),
-        role=role,
-        department=department,
-        is_monitoring_subject=False,
-        **kwargs,
-    )
-    db.add(user)
-    db.flush()
-    return user
+    default_project = db.query(Project).filter(Project.name == "Productivity Operations").first()
+    if default_project:
+        db.query(AppRule).filter(AppRule.project_id == default_project.id).delete(synchronize_session=False)
+        db.delete(default_project)
 
 
 if __name__ == "__main__":

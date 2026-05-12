@@ -2,11 +2,11 @@
 from models.user import User            # noqa
 from models.manager import Manager      # noqa
 from models.shift import Shift, EmployeeShiftAssignment  # noqa
-from models.project import Project      # noqa
+from models.project import Project, ProjectTask  # noqa
 from models.groups import CustomGroup, CustomGroupMember  # noqa
 from models.employee import EmployeeAsset, EmployeeHistory  # noqa
 from models.activity_log import ActivityLog  # noqa
-from models.usage import AppUsage, UrlUsage  # noqa
+from models.usage import AppUsage, BrowserUrlActivity, UrlUsage  # noqa
 from models.monitoring import (         # noqa
     IdleLog,
     Screenshot,

@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from core.time_utils import now_ist
 from database import Base
 
 
@@ -10,11 +10,19 @@ class IdleLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     start_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime, nullable=True)
     duration = Column(Integer, default=0)  # seconds
+    reason_category = Column(String(160), nullable=True)
     reason = Column(Text, nullable=True)  # employee-provided reason
-    created_at = Column(DateTime, default=datetime.utcnow)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=True)
+    created_at = Column(DateTime, default=now_ist)
 
-    user = relationship("User", back_populates="idle_logs")
+    user = relationship("User", back_populates="idle_logs", foreign_keys=[user_id])
+    project = relationship("Project", foreign_keys=[project_id])
+    manager = relationship("User", foreign_keys=[manager_id])
+    shift = relationship("Shift", foreign_keys=[shift_id])
 
 
 class Screenshot(Base):
@@ -27,7 +35,7 @@ class Screenshot(Base):
     productivity_score = Column(Integer, nullable=True)
     trigger_reason = Column(String(255), nullable=True)  # e.g. "low_productivity", "random"
     activity_log_id = Column(Integer, ForeignKey("activity_logs.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)
 
     user = relationship("User", back_populates="screenshots")
 
@@ -44,7 +52,7 @@ class ProductivityScore(Base):
     unproductive_pct = Column(Integer, default=0)
     login_time = Column(DateTime, nullable=True)
     logout_time = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)
 
     user = relationship("User", back_populates="productivity_scores")
 
@@ -63,6 +71,6 @@ class AppRule(Base):
     severity = Column(String(20), default="medium", nullable=False)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)
 
     project = relationship("Project")

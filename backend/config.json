@@ -5,10 +5,10 @@
     "jwtExpiresIn": "8h"
   },
   "mysql": {
-    "host": "10.10.11.80",
+    "host": "10.10.8.22",
     "port": 3306,
     "database": "employee-productivity",
-    "username": "asset",
+    "username": "root",
     "password": "Usn7ets2020#",
     "dialect": "mysql",
     "logging": false,

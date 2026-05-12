@@ -33,12 +33,12 @@ def group_options(
         projects=[_to_project_option(project) for project in _visible_projects(db, current_user)],
         departments=[
             GroupOption(
-                id=f"department:{name}",
-                label=name,
+                id=f"group:{group.id}",
+                label=group.name,
                 member_type="department",
-                department_name=name,
+                department_name=group.name,
             )
-            for name in _visible_departments(db, current_user)
+            for group in _visible_groups(db, current_user)
         ],
     )
 
@@ -63,9 +63,6 @@ def create_group(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin", "manager")),
 ):
-    if not payload.members:
-        raise HTTPException(status_code=400, detail="At least one member is required")
-
     group = CustomGroup(
         name=payload.name.strip(),
         category_name=payload.category_name.strip(),
@@ -97,9 +94,6 @@ def update_group(
         raise HTTPException(status_code=404, detail="Group not found")
     if not _can_view_group(current_user, group):
         raise HTTPException(status_code=403, detail="Not allowed to update this group")
-    if not payload.members:
-        raise HTTPException(status_code=400, detail="At least one member is required")
-
     group.name = payload.name.strip()
     group.category_name = payload.category_name.strip()
     group.description = (payload.description or "").strip() or None
@@ -389,7 +383,12 @@ def _visible_projects(db: Session, current_user: User) -> list[Project]:
 
 
 def _visible_departments(db: Session, current_user: User) -> list[str]:
-    return sorted({(user.department or "").strip() for user in _visible_users(db, current_user) if (user.department or "").strip()})
+    return sorted({(group.name or "").strip() for group in _visible_groups(db, current_user) if (group.name or "").strip()})
+
+
+def _visible_groups(db: Session, current_user: User) -> list[CustomGroup]:
+    groups = db.query(CustomGroup).order_by(CustomGroup.category_name.asc(), CustomGroup.name.asc()).all()
+    return [group for group in groups if _can_view_group(current_user, group)]
 
 
 def _can_view_group(current_user: User, group: CustomGroup) -> bool:

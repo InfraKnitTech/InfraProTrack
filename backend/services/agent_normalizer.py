@@ -6,10 +6,11 @@ from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
+from core.time_utils import now_ist, to_ist_naive
 from models.activity_log import ActivityLog
 from models.agent import AgentDevice, FileUsage, RawAgentEvent
 from models.monitoring import AppRule, IdleLog
-from models.usage import AppUsage, UrlUsage
+from models.usage import AppUsage, BrowserUrlActivity, UrlUsage
 from models.user import User
 
 
@@ -54,8 +55,11 @@ def _payload(raw: RawAgentEvent) -> dict[str, Any]:
 def _normalize_event(db: Session, raw: RawAgentEvent, user: User, payload: dict[str, Any]) -> bool:
     event_type = raw.event_type
 
-    if event_type in {"app_session_start", "active_window", "idle_start"}:
+    if event_type in {"app_session_start", "idle_start"}:
         return False
+
+    if event_type == "active_window":
+        return _normalize_active_window_sample(db, user, payload, raw.captured_at)
 
     if event_type == "app_session_end":
         return _normalize_app_session(db, raw.agent_id, user, payload, raw.captured_at)
@@ -64,12 +68,12 @@ def _normalize_event(db: Session, raw: RawAgentEvent, user: User, payload: dict[
         return _normalize_idle(db, user, payload, raw.captured_at)
 
     if event_type in {"login", "logout"}:
-        captured_at = _parse_dt(payload.get("captured_at")) or raw.captured_at or datetime.utcnow()
+        captured_at = _parse_dt(payload.get("captured_at")) or raw.captured_at or now_ist()
         db.add(ActivityLog(
             user_id=user.id,
             type=event_type,
-            start_time=_naive_utc(captured_at),
-            end_time=_naive_utc(captured_at),
+            start_time=_ist_naive(captured_at),
+            end_time=_ist_naive(captured_at),
             duration=0,
         ))
         return True
@@ -84,7 +88,7 @@ def _normalize_event(db: Session, raw: RawAgentEvent, user: User, payload: dict[
 
 
 def _normalize_app_session(db: Session, agent_id: int, user: User, payload: dict[str, Any], fallback_time: datetime | None) -> bool:
-    start_time = _parse_dt(payload.get("start_time")) or fallback_time or datetime.utcnow()
+    start_time = _parse_dt(payload.get("start_time")) or fallback_time or now_ist()
     end_time = _parse_dt(payload.get("end_time")) or fallback_time or start_time
     duration = _duration(payload, start_time, end_time)
     if duration <= 0:
@@ -102,11 +106,12 @@ def _normalize_app_session(db: Session, agent_id: int, user: User, payload: dict
         app_name=app_name,
         window_title=window_title,
         file_path=file_path,
-        start_time=_naive_utc(start_time),
-        end_time=_naive_utc(end_time),
+        start_time=_ist_naive(start_time),
+        end_time=_ist_naive(end_time),
         duration=duration,
     ))
-    _upsert_app_usage(db, user.id, app_name, category, _naive_utc(start_time), duration)
+    if not payload.get("app_usage_already_sampled"):
+        _upsert_app_usage(db, user.id, app_name, category, _ist_naive(start_time), duration)
 
     if file_path:
         db.add(FileUsage(
@@ -115,15 +120,29 @@ def _normalize_app_session(db: Session, agent_id: int, user: User, payload: dict
             file_path=file_path,
             app_name=app_name,
             window_title=window_title,
-            start_time=_naive_utc(start_time),
-            end_time=_naive_utc(end_time),
+            start_time=_ist_naive(start_time),
+            end_time=_ist_naive(end_time),
             duration=duration,
         ))
     return True
 
 
+def _normalize_active_window_sample(db: Session, user: User, payload: dict[str, Any], fallback_time: datetime | None) -> bool:
+    start_time = _parse_dt(payload.get("start_time")) or fallback_time or now_ist()
+    end_time = _parse_dt(payload.get("end_time")) or fallback_time or start_time
+    duration = _duration(payload, start_time, end_time)
+    if duration <= 0:
+        return False
+
+    app_name = _clean(payload.get("app_name")) or _clean(payload.get("process_name")) or "Unknown"
+    window_title = _clean(payload.get("window_title"))
+    category = _classify_app(db, app_name, window_title)
+    _upsert_app_usage(db, user.id, app_name, category, _ist_naive(start_time), duration)
+    return True
+
+
 def _normalize_idle(db: Session, user: User, payload: dict[str, Any], fallback_time: datetime | None) -> bool:
-    start_time = _parse_dt(payload.get("start_time")) or fallback_time or datetime.utcnow()
+    start_time = _parse_dt(payload.get("start_time")) or fallback_time or now_ist()
     end_time = _parse_dt(payload.get("end_time")) or fallback_time or start_time
     duration = _duration(payload, start_time, end_time)
     if duration <= 0:
@@ -132,15 +151,20 @@ def _normalize_idle(db: Session, user: User, payload: dict[str, Any], fallback_t
     db.add(ActivityLog(
         user_id=user.id,
         type="idle",
-        start_time=_naive_utc(start_time),
-        end_time=_naive_utc(end_time),
+        start_time=_ist_naive(start_time),
+        end_time=_ist_naive(end_time),
         duration=duration,
     ))
     db.add(IdleLog(
         user_id=user.id,
-        start_time=_naive_utc(start_time),
+        start_time=_ist_naive(start_time),
+        end_time=_ist_naive(end_time),
         duration=duration,
+        reason_category=_clean(payload.get("reason_category")),
         reason=_clean(payload.get("reason")),
+        project_id=user.project_id,
+        manager_id=user.manager_id,
+        shift_id=user.shift_id,
     ))
     return True
 
@@ -150,15 +174,15 @@ def _normalize_file_usage(db: Session, agent_id: int, user: User, payload: dict[
     if not file_path:
         return False
 
-    captured_at = _parse_dt(payload.get("captured_at")) or fallback_time or datetime.utcnow()
+    captured_at = _parse_dt(payload.get("captured_at")) or fallback_time or now_ist()
     db.add(FileUsage(
         agent_id=agent_id,
         user_id=user.id,
         file_path=file_path,
         app_name=_clean(payload.get("app_name")),
         window_title=_clean(payload.get("window_title")),
-        start_time=_naive_utc(captured_at),
-        end_time=_naive_utc(captured_at),
+        start_time=_ist_naive(captured_at),
+        end_time=_ist_naive(captured_at),
         duration=int(payload.get("duration") or 0),
     ))
     return True
@@ -169,22 +193,39 @@ def _normalize_url_usage(db: Session, user: User, payload: dict[str, Any], fallb
     if not url:
         return False
 
-    start_time = _parse_dt(payload.get("start_time")) or fallback_time or datetime.utcnow()
+    start_time = _parse_dt(payload.get("start_time")) or fallback_time or now_ist()
     end_time = _parse_dt(payload.get("end_time")) or fallback_time or start_time
     duration = _duration(payload, start_time, end_time)
-    domain = urlparse(url).netloc or url.split("/")[0]
+    if duration <= 0:
+        return False
+    domain = _clean(payload.get("domain")) or urlparse(url).netloc or url.split("/")[0]
     category = _classify_domain(db, domain, url)
     activity_type = "unproductive" if category in {"unproductive", "prohibited"} else "active"
 
-    db.add(ActivityLog(
+    if not payload.get("usage_only"):
+        db.add(ActivityLog(
+            user_id=user.id,
+            type=activity_type,
+            app_name=_clean(payload.get("app_name")),
+            window_title=_clean(payload.get("window_title")),
+            url=url,
+            start_time=_ist_naive(start_time),
+            end_time=_ist_naive(end_time),
+            duration=duration,
+        ))
+    db.add(BrowserUrlActivity(
         user_id=user.id,
-        type=activity_type,
+        app_name=_clean(payload.get("app_name")),
+        process_name=_clean(payload.get("process_name")),
+        window_title=_clean(payload.get("window_title")),
+        domain=domain,
         url=url,
-        start_time=_naive_utc(start_time),
-        end_time=_naive_utc(end_time),
+        category=category,
+        start_time=_ist_naive(start_time),
+        end_time=_ist_naive(end_time),
         duration=duration,
     ))
-    _upsert_url_usage(db, user.id, domain, url, category, _naive_utc(start_time), duration)
+    _upsert_url_usage(db, user.id, domain, url, category, _ist_naive(start_time), duration)
     return True
 
 
@@ -199,6 +240,9 @@ def _resolve_user(db: Session, agent: AgentDevice, payload: dict[str, Any]) -> U
 
 def _classify_app(db: Session, app_name: str, window_title: str | None) -> str:
     terms = [value.lower() for value in (app_name, window_title or "") if value]
+    heuristic = _heuristic_category(" ".join(terms))
+    if heuristic != "neutral":
+        return heuristic
     rules = db.query(AppRule).filter(AppRule.app_name.isnot(None)).all()
     for rule in rules:
         rule_name = (rule.app_name or "").lower()
@@ -210,11 +254,40 @@ def _classify_app(db: Session, app_name: str, window_title: str | None) -> str:
 def _classify_domain(db: Session, domain: str, url: str | None) -> str:
     domain_l = (domain or "").lower()
     url_l = (url or "").lower()
+    heuristic = _heuristic_category(f"{domain_l} {url_l}")
+    if heuristic != "neutral":
+        return heuristic
     rules = db.query(AppRule).filter(AppRule.domain.isnot(None)).all()
     for rule in rules:
         rule_domain = (rule.domain or "").lower()
         if rule_domain and (rule_domain in domain_l or rule_domain in url_l):
             return rule.category
+    return "neutral"
+
+
+def _heuristic_category(text: str) -> str:
+    value = (text or "").lower()
+    educational_terms = (
+        "tutorial", "coding", "programming", "developer", "development", "python",
+        "javascript", "react", "fastapi", "course", "lecture", "lesson", "learn",
+        "training", "education", "explained", "documentation",
+    )
+    entertainment_terms = (
+        "movie", "music", "song", "songs", "trailer", "shorts", "comedy",
+        "web series", "episode", "official video", "lyrics",
+    )
+    gaming_terms = (
+        "game", "gaming", "games", "onlinegames", "poki", "crazygames",
+        "miniclip", "roblox", "steam", "epicgames", "casino", "betting",
+    )
+    if "youtube" in value or "youtu.be" in value:
+        if any(term in value for term in educational_terms):
+            return "productive"
+        if any(term in value for term in entertainment_terms):
+            return "unproductive"
+        return "unproductive"
+    if any(term in value for term in gaming_terms):
+        return "unproductive"
     return "neutral"
 
 
@@ -265,7 +338,7 @@ def _duration(payload: dict[str, Any], start_time: datetime, end_time: datetime)
         duration = 0
     if duration > 0:
         return duration
-    return max(0, int((_naive_utc(end_time) - _naive_utc(start_time)).total_seconds()))
+    return max(0, int((_ist_naive(end_time) - _ist_naive(start_time)).total_seconds()))
 
 
 def _parse_dt(value: Any) -> datetime | None:
@@ -279,10 +352,8 @@ def _parse_dt(value: Any) -> datetime | None:
         return None
 
 
-def _naive_utc(value: datetime) -> datetime:
-    if value.tzinfo:
-        return value.astimezone(timezone.utc).replace(tzinfo=None)
-    return value
+def _ist_naive(value: datetime) -> datetime:
+    return to_ist_naive(value) or value
 
 
 def _clean(value: Any) -> str | None:

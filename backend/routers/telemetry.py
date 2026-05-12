@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 from core.deps import get_db, get_current_user
+from core.time_utils import now_ist
 from models.activity_log import ActivityLog
 from models.usage import AppUsage, UrlUsage
 from models.monitoring import IdleLog, Screenshot, AppRule
@@ -70,7 +71,7 @@ async def ingest_telemetry(
     if effective_type == "idle":
         idle = IdleLog(
             user_id=current_user.id,
-            start_time=parsed_start or datetime.utcnow(),
+            start_time=parsed_start or now_ist(),
             duration=duration,
         )
         db.add(idle)
@@ -78,7 +79,7 @@ async def ingest_telemetry(
     # Save screenshot if provided
     screenshot_path = None
     if screenshot and screenshot.filename:
-        filename = f"{current_user.id}_{int(datetime.utcnow().timestamp())}_{screenshot.filename}"
+        filename = f"{current_user.id}_{now_ist().strftime('%Y%m%d%H%M%S')}_{screenshot.filename}"
         screenshot_path = os.path.join(UPLOAD_DIR, filename)
         async with aiofiles.open(screenshot_path, "wb") as f:
             content = await screenshot.read()

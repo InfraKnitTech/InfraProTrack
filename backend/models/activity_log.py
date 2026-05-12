@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Index
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from core.time_utils import now_ist
 from database import Base
 
 
@@ -17,7 +17,7 @@ class ActivityLog(Base):
     start_time = Column(DateTime, nullable=True)
     end_time = Column(DateTime, nullable=True)
     duration = Column(Integer, default=0)  # seconds
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)
 
     user = relationship("User", back_populates="activity_logs")
 

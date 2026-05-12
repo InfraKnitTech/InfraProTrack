@@ -1,5 +1,4 @@
 import json
-from datetime import datetime
 from secrets import token_urlsafe
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -12,6 +11,7 @@ from core.agent_auth import (
 )
 from core.config import agent as agent_config
 from core.deps import get_db, require_role
+from core.time_utils import now_ist
 from models.agent import AgentDevice, AgentHeartbeat, AgentRegistrationRequest, RawAgentEvent
 from schemas.agent import (
     AgentConfigOut,
@@ -99,7 +99,7 @@ def _issue_credentials(db: Session, identity: AgentRegisterRequest, request: Req
         existing.token_id = token_id
         existing.token_hash = hash_secret(token)
         existing.security_key_hash = hash_secret(security_key)
-        existing.registered_at = datetime.utcnow()
+        existing.registered_at = now_ist()
         db.flush()
         return existing, token_id, token, security_key
 
@@ -169,7 +169,7 @@ def registration_status(request_id: str, db: Session = Depends(get_db)):
             pending.issued_token_id = None
             pending.issued_token = None
             pending.issued_security_key = None
-            pending.credentials_delivered_at = datetime.utcnow()
+            pending.credentials_delivered_at = now_ist()
             db.commit()
             return AgentRegistrationStatusResponse(
                 status="approved",
@@ -222,7 +222,7 @@ def approve_agent(
     pending.issued_token_id = token_id
     pending.issued_token = token
     pending.issued_security_key = security_key
-    pending.decided_at = datetime.utcnow()
+    pending.decided_at = now_ist()
     pending.decided_by = current_user.id
     db.commit()
 
@@ -247,7 +247,7 @@ def reject_agent(
     if not pending:
         raise HTTPException(status_code=404, detail="Pending registration not found")
     pending.status = "rejected"
-    pending.decided_at = datetime.utcnow()
+    pending.decided_at = now_ist()
     pending.decided_by = current_user.id
     db.commit()
     return {"message": "Agent registration rejected"}
@@ -264,7 +264,7 @@ def revoke_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
     agent.status = "revoked"
     agent.is_active = False
-    agent.revoked_at = datetime.utcnow()
+    agent.revoked_at = now_ist()
     db.commit()
     return {"message": "Agent revoked"}
 
@@ -275,7 +275,7 @@ def heartbeat(
     db: Session = Depends(get_db),
     current_agent: AgentDevice = Depends(get_current_agent),
 ):
-    current_agent.last_seen_at = datetime.utcnow()
+    current_agent.last_seen_at = now_ist()
     current_agent.status = body.status
     db.add(AgentHeartbeat(
         agent_id=current_agent.id,
@@ -310,7 +310,7 @@ def event_batch(
         db.add(raw)
         accepted += 1
 
-    current_agent.last_seen_at = datetime.utcnow()
+    current_agent.last_seen_at = now_ist()
     db.flush()
     result = normalize_pending_events(db, agent_id=current_agent.id)
     db.commit()

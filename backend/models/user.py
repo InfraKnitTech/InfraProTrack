@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Boolean
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from core.time_utils import now_ist
 from database import Base
 
 
@@ -24,7 +24,7 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     is_monitoring_subject = Column(Boolean, default=False, nullable=False)
     last_login_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)
 
     # FK relationships
     shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=True)
@@ -40,7 +40,7 @@ class User(Base):
     activity_logs = relationship("ActivityLog", back_populates="user", cascade="all, delete-orphan")
     app_usages = relationship("AppUsage", back_populates="user", cascade="all, delete-orphan")
     url_usages = relationship("UrlUsage", back_populates="user", cascade="all, delete-orphan")
-    idle_logs = relationship("IdleLog", back_populates="user", cascade="all, delete-orphan")
+    idle_logs = relationship("IdleLog", back_populates="user", cascade="all, delete-orphan", foreign_keys="IdleLog.user_id")
     screenshots = relationship("Screenshot", back_populates="user", cascade="all, delete-orphan")
     productivity_scores = relationship("ProductivityScore", back_populates="user", cascade="all, delete-orphan")
     assets = relationship("EmployeeAsset", back_populates="user", cascade="all, delete-orphan")

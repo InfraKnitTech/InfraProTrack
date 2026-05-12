@@ -1,8 +1,7 @@
-from datetime import datetime
-
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
+from core.time_utils import now_ist
 from database import Base
 
 
@@ -17,7 +16,7 @@ class CustomGroup(Base):
     leader_user_id = Column(Integer, nullable=True, index=True)
     leader_title = Column(String(160), nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)
 
     parent_group = relationship(
         "CustomGroup",
@@ -52,7 +51,7 @@ class CustomGroupMember(Base):
     department_name = Column(String(120), nullable=True, index=True)
     label_override = Column(String(160), nullable=True)
     sort_order = Column(Integer, default=0, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)
 
     group = relationship("CustomGroup", back_populates="members")
     parent = relationship("CustomGroupMember", remote_side=[id], back_populates="children")

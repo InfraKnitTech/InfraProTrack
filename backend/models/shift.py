@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Time, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from core.time_utils import now_ist
 from database import Base
 
 
@@ -14,7 +14,7 @@ class Shift(Base):
     timezone = Column(String(64), default="Asia/Kolkata")
     grace_minutes = Column(Integer, default=10, nullable=False)
     is_overnight = Column(Integer, default=0, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)
 
     users = relationship("User", back_populates="shift")
 
@@ -26,7 +26,7 @@ class EmployeeShiftAssignment(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     weekday = Column(Integer, nullable=False, index=True)  # Monday=0, Sunday=6
     shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)
 
     user = relationship("User", back_populates="shift_assignments")
     shift = relationship("Shift")

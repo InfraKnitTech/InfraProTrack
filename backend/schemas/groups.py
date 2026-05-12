@@ -22,7 +22,7 @@ class GroupCreate(BaseModel):
     parent_group_id: int | None = None
     leader_user_id: int | None = None
     leader_title: str | None = Field(default=None, max_length=160)
-    members: list[GroupMemberCreate]
+    members: list[GroupMemberCreate] = Field(default_factory=list)
 
 
 class GroupUpdate(BaseModel):
@@ -32,7 +32,7 @@ class GroupUpdate(BaseModel):
     parent_group_id: int | None = None
     leader_user_id: int | None = None
     leader_title: str | None = Field(default=None, max_length=160)
-    members: list[GroupMemberCreate]
+    members: list[GroupMemberCreate] = Field(default_factory=list)
 
 
 class GroupMemberResponse(BaseModel):

@@ -8,6 +8,7 @@ from utils.time_utils import utc_now
 class RuntimeState:
     current_window: object | None = None
     current_start: datetime = field(default_factory=utc_now)
+    last_active_sample_at: datetime | None = None
     idle_started_at: datetime | None = None
     last_heartbeat: float = 0.0
     last_flush: float = 0.0

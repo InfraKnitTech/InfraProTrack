@@ -49,6 +49,7 @@ try:
             supervisor = runner.build_supervisor()
             wait_for_registration(supervisor.client, config, logger)
             supervisor.queue.enqueue("login", supervisor.base_payload())
+            supervisor.sender.flush_if_due(force=True)
             while self.running:
                 try:
                     supervisor.tick()
@@ -98,9 +99,11 @@ class Supervisor:
         }
 
     def ensure_ready(self, wait: bool = True) -> bool:
+        if ensure_registered_once(self.client, self.config, self.logger):
+            return True
         if wait:
             return wait_for_registration(self.client, self.config, self.logger)
-        return ensure_registered_once(self.client, self.config, self.logger)
+        return False
 
     def heartbeat_if_due(self) -> None:
         now = time.time()
@@ -124,6 +127,7 @@ class Supervisor:
         self.logger.info("Starting InfraProTrack Windows agent")
         self.ensure_ready(wait=True)
         self.queue.enqueue("login", self.base_payload())
+        self.sender.flush_if_due(force=True)
         while self.state.running:
             try:
                 self.tick()

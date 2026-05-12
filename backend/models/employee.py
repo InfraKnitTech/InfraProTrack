@@ -1,8 +1,7 @@
-from datetime import datetime
-
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
+from core.time_utils import now_ist
 from database import Base
 
 
@@ -15,7 +14,7 @@ class EmployeeAsset(Base):
     asset_name = Column(String(160), nullable=False)
     asset_tag = Column(String(120), nullable=True)
     notes = Column(String(500), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)
 
     user = relationship("User", back_populates="assets")
 
@@ -30,7 +29,7 @@ class EmployeeHistory(Base):
     old_value = Column(String(1000), nullable=True)
     new_value = Column(String(1000), nullable=True)
     changed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)
 
     user = relationship("User", foreign_keys=[user_id], back_populates="history")
     changed_by = relationship("User", foreign_keys=[changed_by_id])

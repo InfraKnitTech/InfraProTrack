@@ -1,10 +1,9 @@
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from core.deps import get_db
 from core.security import create_access_token, get_password_hash, verify_password
+from core.time_utils import now_ist
 from models.user import User
 from schemas.auth import LoginRequest, RegisterRequest, TokenResponse
 
@@ -41,7 +40,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=403, detail="User is inactive")
 
-    user.last_login_at = datetime.utcnow()
+    user.last_login_at = now_ist()
     db.commit()
 
     token = create_access_token({"id": user.id, "role": user.role})
