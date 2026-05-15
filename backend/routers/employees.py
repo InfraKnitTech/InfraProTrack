@@ -1,7 +1,8 @@
 from collections import defaultdict
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, load_only, selectinload
 
 from core.deps import get_db, require_role
 from core.security import get_password_hash
@@ -10,7 +11,7 @@ from models.activity_log import ActivityLog
 from models.employee import EmployeeAsset, EmployeeHistory
 from models.project import Project
 from models.shift import EmployeeShiftAssignment, Shift
-from models.usage import AppUsage
+from models.usage import AppUsage, BrowserUrlActivity
 from models.user import User
 from schemas.employees import (
     EmployeeCreate,
@@ -39,7 +40,7 @@ def list_employees(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin", "manager")),
 ):
-    query = _employee_query(db)
+    query = _employee_query(db, include_detail=False)
     if status_filter:
         query = query.filter(User.employment_status == status_filter)
     if name:
@@ -54,7 +55,7 @@ def list_employees(
     if shift_id:
         query = query.filter(User.shift_id == shift_id)
     rows = [user for user in query.order_by(User.full_name.asc(), User.username.asc()).all() if _can_view_employee(current_user, user)]
-    return EmployeeListResponse(items=[_employee_out(user) for user in rows])
+    return EmployeeListResponse(items=[_employee_out(user, include_detail=False) for user in rows])
 
 
 @router.post("", response_model=EmployeeOut, status_code=status.HTTP_201_CREATED, summary="Create an employee")
@@ -113,6 +114,20 @@ def pending_employee_agents(
     agents = db.query(AgentDevice).filter(
         AgentDevice.is_active.is_(True),
         AgentDevice.user_id.is_(None),
+    ).options(
+        load_only(
+            AgentDevice.id,
+            AgentDevice.device_id,
+            AgentDevice.hostname,
+            AgentDevice.username,
+            AgentDevice.os_type,
+            AgentDevice.os_version,
+            AgentDevice.agent_version,
+            AgentDevice.ip_address,
+            AgentDevice.status,
+            AgentDevice.last_seen_at,
+            AgentDevice.registered_at,
+        )
     ).order_by(AgentDevice.last_seen_at.desc(), AgentDevice.registered_at.desc()).all()
     return PendingEmployeeAgentListResponse(items=[_pending_agent_out(db, agent) for agent in agents])
 
@@ -200,6 +215,9 @@ def employee_insights(
         raise HTTPException(status_code=404, detail="Employee not found")
 
     activities = db.query(ActivityLog).filter(ActivityLog.user_id == employee_id).order_by(ActivityLog.start_time.desc()).all()
+    browser_activities = db.query(BrowserUrlActivity).filter(
+        BrowserUrlActivity.user_id == employee_id,
+    ).order_by(BrowserUrlActivity.start_time.desc()).limit(400).all()
     productive = sum(int(row.duration or 0) for row in activities if row.type == "active")
     unproductive = sum(int(row.duration or 0) for row in activities if row.type == "unproductive")
     idle = sum(int(row.duration or 0) for row in activities if row.type == "idle")
@@ -220,18 +238,7 @@ def employee_insights(
             {"name": name, "value": value}
             for name, value in sorted(app_totals.items(), key=lambda item: item[1], reverse=True)[:10]
         ],
-        recent_activity=[
-            EmployeeInsightEvent(
-                id=row.id,
-                type=row.type,
-                app_name=row.app_name,
-                window_title=row.window_title,
-                start_time=row.start_time,
-                end_time=row.end_time,
-                duration=int(row.duration or 0),
-            )
-            for row in activities[:50]
-        ],
+        recent_activity=_recent_activity_rows(activities[:400], browser_activities)[:50],
         history=_history_rows(user.history),
     )
 
@@ -248,23 +255,29 @@ def employee_history(
     return EmployeeHistoryResponse(items=_history_rows(user.history))
 
 
-def _employee_query(db: Session):
-    return db.query(User).options(
-        joinedload(User.assets),
-        joinedload(User.shift_assignments).joinedload(EmployeeShiftAssignment.shift),
+def _employee_query(db: Session, include_detail: bool = True):
+    options = [
         joinedload(User.manager),
         joinedload(User.project),
         joinedload(User.shift),
         joinedload(User.created_by),
-        joinedload(User.history).joinedload(EmployeeHistory.changed_by),
-    ).filter(User.is_monitoring_subject.is_(True))
+    ]
+    if include_detail:
+        options.extend([
+            selectinload(User.assets),
+            selectinload(User.shift_assignments).joinedload(EmployeeShiftAssignment.shift),
+            selectinload(User.history).joinedload(EmployeeHistory.changed_by),
+        ])
+    return db.query(User).options(*options).filter(User.is_monitoring_subject.is_(True))
 
 
 def _load_employee(db: Session, employee_id: int) -> User | None:
     return _employee_query(db).filter(User.id == employee_id).first()
 
 
-def _employee_out(user: User) -> EmployeeOut:
+def _employee_out(user: User, include_detail: bool = True) -> EmployeeOut:
+    assets = list(user.assets or []) if include_detail else []
+    assignments = list(user.shift_assignments or []) if include_detail else []
     return EmployeeOut(
         id=user.id,
         username=user.username,
@@ -287,7 +300,7 @@ def _employee_out(user: User) -> EmployeeOut:
         created_at=user.created_at,
         created_by_id=user.created_by_id,
         created_by_name=(user.created_by.full_name or user.created_by.username) if user.created_by else None,
-        assets=list(user.assets or []),
+        assets=assets,
         schedule=[
             {
                 "id": item.id,
@@ -298,7 +311,7 @@ def _employee_out(user: User) -> EmployeeOut:
                 "end_time": item.shift.end_time.isoformat(),
                 "timezone": item.shift.timezone,
             }
-            for item in sorted(user.shift_assignments or [], key=lambda row: row.weekday)
+            for item in sorted(assignments, key=lambda row: row.weekday)
             if item.shift
         ],
     )
@@ -437,6 +450,67 @@ def _can_view_employee(current_user: User, target: User) -> bool:
     if current_user.role == "admin":
         return True
     return target.manager_id == current_user.id
+
+
+def _recent_activity_rows(activities: list[ActivityLog], browser_activities: list[BrowserUrlActivity]) -> list[EmployeeInsightEvent]:
+    rows: list[EmployeeInsightEvent] = [
+        EmployeeInsightEvent(
+            id=row.id,
+            type=row.type,
+            app_name=row.app_name,
+            window_title=row.window_title,
+            url=row.url,
+            domain=None,
+            start_time=row.start_time,
+            end_time=row.end_time,
+            duration=int(row.duration or 0),
+        )
+        for row in activities
+        if not row.url
+    ]
+    for row in browser_activities:
+        rows.append(EmployeeInsightEvent(
+            id=row.id,
+            type="unproductive" if row.category in {"unproductive", "prohibited"} else "active",
+            app_name=row.app_name or row.process_name,
+            window_title=row.window_title,
+            url=row.url,
+            domain=row.domain,
+            start_time=row.start_time,
+            end_time=row.end_time,
+            duration=int(row.duration or 0),
+        ))
+    return _merge_activity_events(rows)[:50]
+
+
+def _merge_activity_events(rows: list[EmployeeInsightEvent]) -> list[EmployeeInsightEvent]:
+    sorted_rows = sorted(rows, key=lambda item: item.start_time or item.end_time or datetime.min)
+    merged: list[EmployeeInsightEvent] = []
+    for row in sorted_rows:
+        previous = merged[-1] if merged else None
+        if previous and _can_merge_activity_event(previous, row):
+            previous.end_time = max(previous.end_time or row.end_time, row.end_time or previous.end_time)
+            previous.duration = int(previous.duration or 0) + int(row.duration or 0)
+            previous.window_title = row.window_title or previous.window_title
+            previous.url = row.url or previous.url
+            previous.domain = row.domain or previous.domain
+            continue
+        merged.append(row)
+    return sorted(merged, key=lambda item: item.start_time or item.end_time or datetime.min, reverse=True)
+
+
+def _can_merge_activity_event(previous: EmployeeInsightEvent, current: EmployeeInsightEvent) -> bool:
+    if previous.type != current.type:
+        return False
+    if (previous.app_name or "") != (current.app_name or ""):
+        return False
+    previous_target = previous.url or previous.window_title or ""
+    current_target = current.url or current.window_title or ""
+    if previous_target != current_target:
+        return False
+    if not previous.end_time or not current.start_time:
+        return False
+    return (current.start_time - previous.end_time).total_seconds() <= 20
 
 
 def _clean(value: str | None) -> str | None:

@@ -12,6 +12,7 @@ from models.monitoring import (         # noqa
     Screenshot,
     ProductivityScore,
     AppRule,
+    ProhibitedUsageAlert,
 )
 from models.agent import (              # noqa
     AgentDevice,

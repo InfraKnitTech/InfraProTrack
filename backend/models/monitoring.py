@@ -74,3 +74,31 @@ class AppRule(Base):
     created_at = Column(DateTime, default=now_ist)
 
     project = relationship("Project")
+
+
+class ProhibitedUsageAlert(Base):
+    __tablename__ = "prohibited_usage_alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)
+    shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=True, index=True)
+    resource_type = Column(String(32), nullable=False, index=True)
+    app_name = Column(String(255), nullable=True)
+    domain = Column(String(500), nullable=True)
+    url = Column(Text, nullable=True)
+    window_title = Column(String(500), nullable=True)
+    first_seen_at = Column(DateTime, nullable=False, index=True)
+    last_seen_at = Column(DateTime, nullable=False, index=True)
+    duration = Column(Integer, default=0, nullable=False)
+    occurrence_count = Column(Integer, default=1, nullable=False)
+    manager_email = Column(String(255), nullable=True)
+    email_status = Column(String(64), default="pending", nullable=False)
+    email_error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=now_ist)
+
+    user = relationship("User", foreign_keys=[user_id])
+    manager = relationship("User", foreign_keys=[manager_id])
+    project = relationship("Project", foreign_keys=[project_id])
+    shift = relationship("Shift", foreign_keys=[shift_id])

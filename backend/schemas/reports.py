@@ -39,6 +39,7 @@ class EmployeeProductivityReportRow(BaseModel):
     active_seconds: int
     productive_seconds: int
     idle_seconds: int
+    productivity_score: int | None = None
 
 
 class EmployeeProductivityReportResponse(BaseModel):
@@ -67,3 +68,31 @@ class IdleTimeReportResponse(BaseModel):
     start_date: str | None
     end_date: str | None
     rows: list[IdleTimeReportRow]
+
+
+class ProhibitedUsageReportRow(BaseModel):
+    id: int
+    employee_id: int
+    employee_name: str
+    username: str
+    project_name: str | None
+    manager_name: str | None
+    shift_name: str | None
+    resource_type: str
+    app_name: str | None
+    domain: str | None
+    url: str | None
+    window_title: str | None
+    first_seen_at: datetime
+    last_seen_at: datetime
+    duration: int
+    occurrence_count: int
+    manager_email: str | None
+    email_status: str
+    email_error: str | None
+
+
+class ProhibitedUsageReportResponse(BaseModel):
+    start_date: str | None
+    end_date: str | None
+    rows: list[ProhibitedUsageReportRow]

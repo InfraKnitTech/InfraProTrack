@@ -30,11 +30,13 @@ def create_rule(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    _validate_rule_payload(payload.app_name, payload.domain)
+    app_name = _clean_str(payload.app_name)
+    domain = _clean_str(payload.domain)
+    _validate_rule_payload(app_name, domain)
     project = _resolve_project(db, payload.project_id)
     rule = AppRule(
-        app_name=_clean_str(payload.app_name),
-        domain=_clean_str(payload.domain),
+        app_name=app_name,
+        domain=domain,
         category=payload.category,
         severity=payload.severity,
         project_id=project.id if project else None,

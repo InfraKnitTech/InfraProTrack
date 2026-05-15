@@ -19,7 +19,11 @@ if DATABASE_URL.startswith("sqlite"):
 else:
     engine_kwargs["pool_size"] = mysql.POOL_MAX
     engine_kwargs["max_overflow"] = 5
-    engine_kwargs["pool_recycle"] = 1200
+    # The project commonly runs against a LAN MySQL host. Recycle idle
+    # connections earlier and prefer recently-used pooled connections so
+    # half-closed sockets are less likely to reach request handlers.
+    engine_kwargs["pool_recycle"] = 300
+    engine_kwargs["pool_use_lifo"] = True
     engine_kwargs["pool_timeout"] = 10
     engine_kwargs["connect_args"] = {
         "connect_timeout": 10,

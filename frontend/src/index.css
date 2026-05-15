@@ -137,6 +137,24 @@ p {
   font-size: 0.9rem;
 }
 
+.inline-feedback {
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.inline-feedback.error {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.inline-feedback.success {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
 .field-icon-wrap {
   position: relative;
 }
@@ -642,6 +660,23 @@ td {
   background: var(--warning-soft);
 }
 
+.status-pill.alert-sent {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.status-pill.alert-failed,
+.status-pill.alert-skipped_no_manager,
+.status-pill.alert-skipped_email_not_configured {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.status-pill.alert-pending {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
 .legend-list > div {
   justify-content: space-between;
 }
@@ -735,6 +770,24 @@ td {
   align-items: center;
   gap: 0.75rem;
   text-align: left;
+}
+
+.report-card > div {
+  min-width: 0;
+}
+
+.report-card strong,
+.report-card small {
+  display: block;
+}
+
+.report-card strong {
+  margin-bottom: 0.3rem;
+}
+
+.report-card:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .rules-layout {
@@ -941,6 +994,31 @@ td {
 
 .analytics-controls label {
   min-width: 220px;
+}
+
+.index-summary {
+  min-width: 190px;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+}
+
+.index-summary span,
+.index-summary small {
+  display: block;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.index-summary strong {
+  display: block;
+  margin: 0.2rem 0;
+  color: var(--text-primary);
+  font-size: 1.8rem;
+  line-height: 1;
 }
 
 .analytics-controls span {

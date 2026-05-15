@@ -87,6 +87,13 @@ function categoryLabel(category) {
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
+function reportGroupLabel(groupBy) {
+  if (groupBy === 'employee') return 'Employee';
+  if (groupBy === 'manager') return 'Manager';
+  if (groupBy === 'shift') return 'Shift time';
+  return 'Project';
+}
+
 function formatIstDateTime(value) {
   if (!value) return '-';
   const text = String(value).trim();
@@ -96,6 +103,42 @@ function formatIstDateTime(value) {
   const clock = timePart.slice(0, 8) || timePart;
   if (!year || !month || !day) return `${cleaned} IST`;
   return `${day}/${month}/${year}${clock ? `, ${clock}` : ''} IST`;
+}
+
+function excelSafe(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function downloadHtmlExcel(filename, sheetTitle, headers, rows) {
+  const headerHtml = headers.map((header) => `<th>${excelSafe(header)}</th>`).join('');
+  const bodyHtml = rows.map((row) => (
+    `<tr>${row.map((cell) => `<td>${excelSafe(cell)}</td>`).join('')}</tr>`
+  )).join('');
+  const html = `
+    <html>
+      <head><meta charset="utf-8" /></head>
+      <body>
+        <table>
+          <caption>${excelSafe(sheetTitle)}</caption>
+          <thead><tr>${headerHtml}</tr></thead>
+          <tbody>${bodyHtml}</tbody>
+        </table>
+      </body>
+    </html>
+  `;
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  const objectUrl = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(objectUrl);
 }
 
 function createGroupMemberDraft(index = 0) {
@@ -214,6 +257,7 @@ export default function Dashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
+  const employeeReportRequestRef = useRef(0);
   const [metrics, setMetrics] = useState({
     total_productive: '0h 00m',
     total_idle: '0h 00m',
@@ -225,17 +269,21 @@ export default function Dashboard() {
   const [appUsageData, setAppUsageData] = useState([]);
   const [topDomains, setTopDomains] = useState([]);
   const [sessionEvents, setSessionEvents] = useState([]);
-  const [applicationActivity, setApplicationActivity] = useState([]);
-  const [browserActivity, setBrowserActivity] = useState([]);
   const [activityRollup, setActivityRollup] = useState([]);
+  const [productivityIndex, setProductivityIndex] = useState({ average_score: 0, employee_count: 0, rows: [] });
+  const [productivityIndexLoading, setProductivityIndexLoading] = useState(false);
   const [analyticsGroupBy, setAnalyticsGroupBy] = useState('employee');
   const [analyticsSource, setAnalyticsSource] = useState('application');
-  const [detailedSessionTab, setDetailedSessionTab] = useState('applications');
   const [managerSummary, setManagerSummary] = useState([]);
   const [employeeSummary, setEmployeeSummary] = useState([]);
   const [employeeProductivityReport, setEmployeeProductivityReport] = useState([]);
   const [employeeReportGroupBy, setEmployeeReportGroupBy] = useState('project');
+  const [employeeReportGroupSearch, setEmployeeReportGroupSearch] = useState('');
+  const [employeeReportLoading, setEmployeeReportLoading] = useState(false);
   const [idleTimeReport, setIdleTimeReport] = useState([]);
+  const [prohibitedUsageReport, setProhibitedUsageReport] = useState([]);
+  const [reportExportTimezone, setReportExportTimezone] = useState('Asia/Kolkata');
+  const [reportExportBusy, setReportExportBusy] = useState('');
   const [employees, setEmployees] = useState([]);
   const [pendingEmployeeAgents, setPendingEmployeeAgents] = useState([]);
   const [employeeFilters, setEmployeeFilters] = useState({
@@ -281,6 +329,7 @@ export default function Dashboard() {
   const [expandedGroupIds, setExpandedGroupIds] = useState([]);
   const [rules, setRules] = useState([]);
   const [rulesLoading, setRulesLoading] = useState(false);
+  const [ruleFormFeedback, setRuleFormFeedback] = useState({ tone: '', message: '' });
   const [ruleForm, setRuleForm] = useState({
     app_name: '',
     domain: '',
@@ -305,6 +354,35 @@ export default function Dashboard() {
   const designationOptions = useMemo(() => (
     [...new Set(employees.map((employee) => employee.designation).filter(Boolean))].sort()
   ), [employees]);
+  const employeeReportGroupOptions = useMemo(() => {
+    const reportOptions = employeeProductivityReport
+      .filter((row) => row.group_by === employeeReportGroupBy)
+      .map((row) => row.group_name)
+      .filter(Boolean);
+    const masterOptions = (() => {
+      if (employeeReportGroupBy === 'employee') {
+        return employees.map((employee) => employee.full_name || employee.username).filter(Boolean);
+      }
+      if (employeeReportGroupBy === 'manager') {
+        return (groupOptions.managers || []).map((option) => option.label).filter(Boolean);
+      }
+      if (employeeReportGroupBy === 'shift') {
+        return shifts.map((shift) => shift.name).filter(Boolean);
+      }
+      return projects.map((project) => project.name).filter(Boolean);
+    })();
+    return [...new Set([...masterOptions, ...reportOptions])]
+      .sort((a, b) => a.localeCompare(b));
+  }, [employeeProductivityReport, employeeReportGroupBy, employees, groupOptions.managers, projects, shifts]);
+  const filteredEmployeeProductivityReport = useMemo(() => {
+    const needle = employeeReportGroupSearch.trim().toLowerCase();
+    if (!needle) {
+      return employeeProductivityReport;
+    }
+    return employeeProductivityReport.filter((row) => (
+      String(row.group_name || '').toLowerCase().includes(needle)
+    ));
+  }, [employeeProductivityReport, employeeReportGroupSearch]);
 
   const editableParentGroups = useMemo(() => (
     groups.filter((group) => group.id !== editingGroupId)
@@ -390,41 +468,57 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
-      try {
-        const headers = getAuthHeaders();
-        if (!headers) {
-          return;
-        }
-        const [dashboardRes, appsRes, domainsRes, sessionsRes, managerRes, employeeRes, shiftRes, projectRes] = await Promise.all([
-          axios.get(`${API_BASE}/api/dashboard/admin`, { headers }),
-          axios.get(`${API_BASE}/api/analytics/top-apps`, { headers }),
-          axios.get(`${API_BASE}/api/analytics/top-domains`, { headers }),
-          axios.get(`${API_BASE}/api/analytics/session-events`, { headers }),
-          axios.get(`${API_BASE}/api/reports/productivity-summary`, { headers, params: { group_by: 'manager' } }),
-          axios.get(`${API_BASE}/api/reports/productivity-summary`, { headers, params: { group_by: 'employee' } }),
-          axios.get(`${API_BASE}/api/reports/productivity-summary`, { headers, params: { group_by: 'shift' } }),
-          axios.get(`${API_BASE}/api/reports/productivity-summary`, { headers, params: { group_by: 'project' } }),
-        ]);
-        setMetrics(dashboardRes.data.metrics);
-        setProductivityData(dashboardRes.data.productivity_data || []);
-        setAppUsageData(appsRes.data.items || []);
-        setTopDomains(domainsRes.data.items || []);
-        setSessionEvents(sessionsRes.data.items || []);
-        setManagerSummary(managerRes.data.rows || []);
-        setEmployeeSummary(employeeRes.data.rows || []);
-        setShiftSummary(shiftRes.data.rows || []);
-        setProjectSummary(projectRes.data.rows || []);
-      } catch (err) {
-        if (handleAuthError(err)) {
-          return;
-        }
-        console.error('Failed to fetch dashboard data', err);
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
       }
+      const requests = [
+        ['dashboard', axios.get(`${API_BASE}/api/dashboard/admin`, { headers })],
+        ['apps', axios.get(`${API_BASE}/api/analytics/top-apps`, { headers })],
+        ['domains', axios.get(`${API_BASE}/api/analytics/top-domains`, { headers })],
+        ['sessions', axios.get(`${API_BASE}/api/analytics/session-events`, { headers })],
+        ['manager', axios.get(`${API_BASE}/api/reports/productivity-summary`, { headers, params: { group_by: 'manager' } })],
+        ['employee', axios.get(`${API_BASE}/api/reports/productivity-summary`, { headers, params: { group_by: 'employee' } })],
+        ['shift', axios.get(`${API_BASE}/api/reports/productivity-summary`, { headers, params: { group_by: 'shift' } })],
+        ['project', axios.get(`${API_BASE}/api/reports/productivity-summary`, { headers, params: { group_by: 'project' } })],
+      ];
+      const results = await Promise.allSettled(requests.map(([, request]) => request));
+      results.forEach((result, index) => {
+        const key = requests[index][0];
+        if (result.status !== 'fulfilled') {
+          if (!handleAuthError(result.reason)) {
+            console.error(`Failed to fetch ${key} dashboard data`, result.reason);
+          }
+          return;
+        }
+        const data = result.value.data;
+        if (key === 'dashboard') {
+          setMetrics(data.metrics);
+          setProductivityData(data.productivity_data || []);
+        } else if (key === 'apps') {
+          setAppUsageData(data.items || []);
+        } else if (key === 'domains') {
+          setTopDomains(data.items || []);
+        } else if (key === 'sessions') {
+          setSessionEvents(data.items || []);
+        } else if (key === 'manager') {
+          setManagerSummary(data.rows || []);
+        } else if (key === 'employee') {
+          setEmployeeSummary(data.rows || []);
+        } else if (key === 'shift') {
+          setShiftSummary(data.rows || []);
+        } else if (key === 'project') {
+          setProjectSummary(data.rows || []);
+        }
+      });
     };
+    if (!['overview', 'managers', 'settings'].includes(activeTab)) {
+      return undefined;
+    }
     fetchData();
-    const interval = setInterval(fetchData, 5000);
+    const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
-  }, []);
+  }, [activeTab]);
 
   const fetchDetailedAnalytics = async () => {
     try {
@@ -432,20 +526,14 @@ export default function Dashboard() {
       if (!headers) {
         return;
       }
-      const [appActivityRes, browserActivityRes, rollupRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/analytics/application-activity`, { headers, params: { limit: 100 } }),
-        axios.get(`${API_BASE}/api/analytics/browser-activity`, { headers, params: { limit: 100 } }),
-        axios.get(`${API_BASE}/api/analytics/activity-rollup`, {
-          headers,
-          params: {
-            group_by: analyticsGroupBy,
-            source: analyticsSource,
-            limit: 100,
-          },
-        }),
-      ]);
-      setApplicationActivity(appActivityRes.data.items || []);
-      setBrowserActivity(browserActivityRes.data.items || []);
+      const rollupRes = await axios.get(`${API_BASE}/api/analytics/activity-rollup`, {
+        headers,
+        params: {
+          group_by: analyticsGroupBy,
+          source: analyticsSource,
+          limit: 100,
+        },
+      });
       setActivityRollup(rollupRes.data.items || []);
     } catch (err) {
       if (handleAuthError(err)) {
@@ -455,38 +543,100 @@ export default function Dashboard() {
     }
   };
 
-  useEffect(() => {
-    if (activeTab !== 'analytics') {
-      return undefined;
-    }
-    fetchDetailedAnalytics();
-    const interval = setInterval(fetchDetailedAnalytics, 10000);
-    return () => clearInterval(interval);
-  }, [activeTab, analyticsGroupBy, analyticsSource]);
-
-  const fetchEmployeeProductivityReport = async () => {
+  const fetchProductivityIndex = async () => {
     try {
       const headers = getAuthHeaders();
       if (!headers) {
         return;
       }
-      const [summaryRes, idleRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/reports/employee-productivity-summary`, {
-          headers,
-          params: { group_by: employeeReportGroupBy },
-        }),
+      const res = await axios.get(`${API_BASE}/api/productivity-index/summary`, { headers });
+      setProductivityIndex(res.data || { average_score: 0, employee_count: 0, rows: [] });
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to fetch productivity index', err);
+    }
+  };
+
+  const recalculateProductivityIndex = async () => {
+    try {
+      setProductivityIndexLoading(true);
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      const res = await axios.post(`${API_BASE}/api/productivity-index/recalculate`, {}, { headers });
+      const rows = res.data.rows || [];
+      const average = rows.length
+        ? Math.round((rows.reduce((total, row) => total + Number(row.score || 0), 0) / rows.length) * 100) / 100
+        : 0;
+      setProductivityIndex({ average_score: average, employee_count: rows.length, rows });
+      fetchEmployeeProductivityReport();
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to recalculate productivity index', err);
+    } finally {
+      setProductivityIndexLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'analytics') {
+      return undefined;
+    }
+    fetchDetailedAnalytics();
+    fetchProductivityIndex();
+    const interval = setInterval(fetchDetailedAnalytics, 10000);
+    return () => clearInterval(interval);
+  }, [activeTab, analyticsGroupBy, analyticsSource]);
+
+  const fetchEmployeeProductivityReport = async () => {
+    const requestId = employeeReportRequestRef.current + 1;
+    employeeReportRequestRef.current = requestId;
+    const groupBy = employeeReportGroupBy;
+    try {
+      setEmployeeReportLoading(true);
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      const summaryRes = await axios.get(`${API_BASE}/api/reports/employee-productivity-summary`, {
+        headers,
+        params: { group_by: groupBy },
+      });
+      if (requestId !== employeeReportRequestRef.current || groupBy !== employeeReportGroupBy) {
+        return;
+      }
+      setEmployeeProductivityReport(summaryRes.data.rows || []);
+      setEmployeeReportLoading(false);
+
+      const [idleRes, prohibitedRes] = await Promise.allSettled([
         axios.get(`${API_BASE}/api/reports/idle-time`, { headers }),
+        axios.get(`${API_BASE}/api/reports/prohibited-usage`, { headers }),
       ]);
-      const res = summaryRes;
-      setEmployeeProductivityReport(res.data.rows || []);
-      setIdleTimeReport(idleRes.data.rows || []);
+      if (idleRes.status === 'fulfilled') {
+        setIdleTimeReport(idleRes.value.data.rows || []);
+      } else if (!handleAuthError(idleRes.reason)) {
+        console.error('Failed to fetch idle time report', idleRes.reason);
+      }
+      if (prohibitedRes.status === 'fulfilled') {
+        setProhibitedUsageReport(prohibitedRes.value.data.rows || []);
+      } else if (!handleAuthError(prohibitedRes.reason)) {
+        console.error('Failed to fetch prohibited usage report', prohibitedRes.reason);
+      }
     } catch (err) {
       if (handleAuthError(err)) {
         return;
       }
       console.error('Failed to fetch employee productivity report', err);
       setEmployeeProductivityReport([]);
-      setIdleTimeReport([]);
+    } finally {
+      if (requestId === employeeReportRequestRef.current) {
+        setEmployeeReportLoading(false);
+      }
     }
   };
 
@@ -496,6 +646,62 @@ export default function Dashboard() {
     }
     fetchEmployeeProductivityReport();
   }, [activeTab, employeeReportGroupBy]);
+
+  const downloadExcelReport = async (endpoint, filename) => {
+    try {
+      const headers = getAuthHeaders();
+      if (!headers) {
+        return;
+      }
+      setReportExportBusy(endpoint);
+      const response = await axios.get(`${API_BASE}${endpoint}`, {
+        headers,
+        params: { report_timezone: reportExportTimezone },
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      if (handleAuthError(err)) {
+        return;
+      }
+      console.error('Failed to download Excel report', err);
+    } finally {
+      setReportExportBusy('');
+    }
+  };
+
+  const downloadEmployeeProductivitySummaryTable = () => {
+    const groupLabel = reportGroupLabel(employeeReportGroupBy);
+    const suffix = employeeReportGroupSearch.trim()
+      ? employeeReportGroupSearch.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+      : 'all';
+    downloadHtmlExcel(
+      `employee-productivity-summary-${employeeReportGroupBy}-${suffix || 'all'}.xls`,
+      `Employee Productivity Summary by ${groupLabel}`,
+      ['Group', 'Employee', 'Username', 'Login', 'Logout', 'Active', 'Productive', 'Idle', 'Productivity Score'],
+      filteredEmployeeProductivityReport.map((row) => [
+        row.group_name,
+        row.employee_name,
+        row.username,
+        formatIstDateTime(row.login_time),
+        formatIstDateTime(row.logout_time),
+        secondsToHours(row.active_seconds),
+        secondsToHours(row.productive_seconds),
+        secondsToHours(row.idle_seconds),
+        row.productivity_score ?? '-',
+      ])
+    );
+  };
 
   const fetchRules = async () => {
     try {
@@ -518,24 +724,29 @@ export default function Dashboard() {
   };
 
   const fetchGroups = async () => {
+    const fallbackOptions = { users: [], managers: [], projects: [], departments: [] };
     try {
       setGroupsLoading(true);
       const headers = getAuthHeaders();
       if (!headers) {
         return;
       }
-      const [groupsRes, optionsRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/groups`, { headers }),
-        axios.get(`${API_BASE}/api/groups/options`, { headers }),
-      ]);
+      const groupsRes = await axios.get(`${API_BASE}/api/groups`, { headers });
       setGroups(groupsRes.data.items || []);
-      setGroupOptions(optionsRes.data || { users: [], managers: [], projects: [], departments: [] });
+      try {
+        const optionsRes = await axios.get(`${API_BASE}/api/groups/options`, { headers });
+        setGroupOptions(optionsRes.data || fallbackOptions);
+      } catch (optionsErr) {
+        if (!handleAuthError(optionsErr)) {
+          console.error('Failed to fetch group options', optionsErr);
+          setGroupOptions(fallbackOptions);
+        }
+      }
     } catch (err) {
       if (handleAuthError(err)) {
         return;
       }
       console.error('Failed to fetch groups', err);
-      setGroups([]);
     } finally {
       setGroupsLoading(false);
     }
@@ -559,7 +770,6 @@ export default function Dashboard() {
         return;
       }
       console.error('Failed to fetch projects', err);
-      setProjects([]);
     } finally {
       setProjectsLoading(false);
     }
@@ -607,12 +817,16 @@ export default function Dashboard() {
       const params = Object.fromEntries(
         Object.entries(employeeFilters).filter(([, value]) => value !== '')
       );
-      const [employeesRes, shiftsRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/employees`, { headers, params }),
-        axios.get(`${API_BASE}/api/shifts`, { headers }),
-      ]);
+      const employeesRes = await axios.get(`${API_BASE}/api/employees`, { headers, params });
       setEmployees(employeesRes.data.items || []);
-      setShifts(shiftsRes.data.items || []);
+      try {
+        const shiftsRes = await axios.get(`${API_BASE}/api/shifts`, { headers });
+        setShifts(shiftsRes.data.items || []);
+      } catch (shiftErr) {
+        if (!handleAuthError(shiftErr)) {
+          console.error('Failed to fetch shifts for employee directory', shiftErr);
+        }
+      }
       fetchPendingEmployeeAgents(headers);
     } catch (err) {
       if (handleAuthError(err)) {
@@ -686,6 +900,23 @@ export default function Dashboard() {
     fetchEmployeeDirectory();
   }, [employeeFilters]);
 
+  useEffect(() => {
+    if (activeTab === 'groups') {
+      fetchGroups();
+    }
+    if (activeTab === 'projects') {
+      fetchProjects();
+    }
+    if (activeTab === 'employees') {
+      fetchEmployeeDirectory();
+    }
+    if (activeTab === 'reports') {
+      fetchEmployeeDirectory();
+      fetchGroups();
+      fetchProjects();
+    }
+  }, [activeTab]);
+
   const decideAgent = async (requestId, action) => {
     try {
       const headers = getAuthHeaders();
@@ -721,16 +952,28 @@ export default function Dashboard() {
   const handleRuleChange = (event) => {
     const { name, value } = event.target;
     setRuleForm((current) => ({ ...current, [name]: value }));
+    if (ruleFormFeedback.message) {
+      setRuleFormFeedback({ tone: '', message: '' });
+    }
   };
 
   const createRule = async (event) => {
     event.preventDefault();
+    const payload = {
+      ...ruleForm,
+      app_name: ruleForm.app_name.trim(),
+      domain: ruleForm.domain.trim(),
+    };
+    if (!payload.app_name && !payload.domain) {
+      setRuleFormFeedback({ tone: 'error', message: 'Enter an application or domain before adding a rule.' });
+      return;
+    }
     try {
       const headers = getAuthHeaders();
       if (!headers) {
         return;
       }
-      await axios.post(`${API_BASE}/api/rules`, ruleForm, {
+      await axios.post(`${API_BASE}/api/rules`, payload, {
         headers,
       });
       setRuleForm({
@@ -739,11 +982,19 @@ export default function Dashboard() {
         category: 'productive',
         severity: 'medium',
       });
+      setRuleFormFeedback({ tone: 'success', message: 'Rule added.' });
       fetchRules();
     } catch (err) {
       if (handleAuthError(err)) {
         return;
       }
+      const detail = err.response?.data?.detail;
+      const message = typeof detail === 'string'
+        ? detail
+        : err.response?.status === 503
+          ? 'Database connection unavailable. Retry after MySQL is reachable.'
+          : 'Rule could not be created. Check backend connectivity and try again.';
+      setRuleFormFeedback({ tone: 'error', message });
       console.error('Failed to create rule', err);
     }
   };
@@ -2230,13 +2481,21 @@ export default function Dashboard() {
                       <div><span>Created by</span><strong>{employeeInsight.employee.created_by_name || 'System'}</strong></div>
                     </div>
                     <DataTable
-                      columns={['Type', 'App', 'Window', 'Duration', 'Start']}
+                      columns={['Type', 'App', 'Window', 'URL', 'Duration', 'Start', 'End']}
                       rows={employeeInsight.recent_activity.map((row) => [
                         row.type,
                         row.app_name || '-',
-                        row.window_title || '-',
+                        <span className="truncate-cell app-window" title={row.window_title || '-'}>
+                          {row.window_title || '-'}
+                        </span>,
+                        row.url ? (
+                          <span className="truncate-cell url-cell" title={row.url}>
+                            {row.url}
+                          </span>
+                        ) : '-',
                         secondsToHours(row.duration),
                         formatIstDateTime(row.start_time),
+                        formatIstDateTime(row.end_time),
                       ])}
                       emptyMessage="No activity recorded for this employee yet."
                     />
@@ -2376,78 +2635,35 @@ export default function Dashboard() {
               />
             </div>
             <div className="panel full">
-              <PanelHeader icon={Activity} title="Detailed Application and URL Sessions" action="Open, close, duration" />
-              <div className="segmented-tabs detail-tabs">
-                <button className={detailedSessionTab === 'applications' ? 'active' : ''} onClick={() => setDetailedSessionTab('applications')}>
-                  <Activity size={15} />
-                  Applications
-                </button>
-                <button className={detailedSessionTab === 'urls' ? 'active' : ''} onClick={() => setDetailedSessionTab('urls')}>
-                  <Building2 size={15} />
-                  URLs
+              <PanelHeader icon={BarChart3} title="Productivity Index Model" action="Stored DB scores" />
+              <div className="analytics-controls">
+                <div className="index-summary">
+                  <span>Average score</span>
+                  <strong>{Math.round(productivityIndex.average_score || 0)}</strong>
+                  <small>{productivityIndex.employee_count || 0} employees scored</small>
+                </div>
+                <button className="btn btn-primary" onClick={recalculateProductivityIndex} disabled={productivityIndexLoading}>
+                  <RefreshCw size={16} />
+                  {productivityIndexLoading ? 'Calculating...' : 'Recalculate index'}
                 </button>
               </div>
-              {detailedSessionTab === 'applications' ? (
-                <div className="fixed-table detailed-session-table">
-                  <DataTable
-                    columns={['Employee', 'Manager', 'Department', 'Project', 'Application', 'Window', 'Category', 'Opened', 'Closed', 'Duration']}
-                    rows={applicationActivity.map((row) => [
-                      row.employee_name,
-                      row.manager_name || '-',
-                      row.department || '-',
-                      row.project_name || '-',
-                      row.application || '-',
-                      <span className="truncate-cell app-window">{row.window_title || '-'}</span>,
-                      <span className={`status-pill analytics-${analyticsCategory(row.category)}`}>{categoryLabel(row.category)}</span>,
-                      formatIstDateTime(row.start_time),
-                      formatIstDateTime(row.end_time),
-                      secondsToHours(row.duration),
-                    ])}
-                    emptyMessage="No detailed application sessions captured yet."
-                  />
-                </div>
-              ) : (
-                <div className="fixed-table detailed-session-table">
-                  <DataTable
-                    columns={['Employee', 'Manager', 'Department', 'Project', 'Browser', 'Domain', 'URL', 'Category', 'Opened', 'Closed', 'Duration']}
-                    rows={browserActivity.map((row) => [
-                      row.employee_name,
-                      row.manager_name || '-',
-                      row.department || '-',
-                      row.project_name || '-',
-                      row.browser || row.application || '-',
-                      row.domain || '-',
-                      <span className="truncate-cell url-cell" title={row.url || ''}>{row.url || '-'}</span>,
-                      <span className={`status-pill analytics-${analyticsCategory(row.category)}`}>{categoryLabel(row.category)}</span>,
-                      formatIstDateTime(row.start_time),
-                      formatIstDateTime(row.end_time),
-                      secondsToHours(row.duration),
-                    ])}
-                    emptyMessage="No detailed browser URL sessions captured yet. Restart the updated agent and browse with Chrome, Edge, Brave, or Firefox."
-                  />
-                </div>
-              )}
-            </div>
-            <div className="panel full">
-              <PanelHeader icon={LogOut} title="Employee Session Events" action="Agent lifecycle" />
-              <div className="fixed-table session-events-table">
-                <DataTable
-                  columns={['Employee', 'Username', 'Department', 'Project', 'Event', 'Time']}
-                  rows={sessionEvents.map((row) => [
-                    <span className="truncate-cell employee-cell">{row.employee_name}</span>,
-                    row.username,
-                    row.department || '-',
-                    row.project_name || '-',
-                    <span className={`status-pill session-${row.event_type}`}>{row.event_type}</span>,
-                    formatIstDateTime(row.captured_at),
-                  ])}
-                  emptyMessage="No agent login or logout events captured yet."
-                />
-              </div>
-            </div>
-            <div className="panel full">
-              <PanelHeader icon={BarChart3} title="Productivity Index Model" action="Pending" />
-              <EmptyState message="No live productivity scoring model is connected yet." />
+              <DataTable
+                columns={['Employee', 'Score', 'Productive %', 'Unproductive %', 'Ideal %', 'Login', 'Logout', 'Date']}
+                rows={(productivityIndex.rows || []).map((row) => [
+                  <div className="stacked-cell">
+                    <strong>{row.employee_name}</strong>
+                    <small>{row.username}</small>
+                  </div>,
+                  <span className={`score ${scoreTone(Number(row.score || 0))}`}>{row.score}</span>,
+                  `${row.productive_pct}%`,
+                  `${row.unproductive_pct}%`,
+                  `${row.idle_pct}%`,
+                  formatIstDateTime(row.login_time),
+                  formatIstDateTime(row.logout_time),
+                  formatIstDateTime(row.date),
+                ])}
+                emptyMessage={productivityIndexLoading ? 'Calculating productivity index...' : 'No stored productivity scores yet. Click Recalculate index.'}
+              />
             </div>
           </section>
         )}
@@ -2455,25 +2671,107 @@ export default function Dashboard() {
         {activeTab === 'reports' && (
           <section className="page-grid">
             <div className="panel full">
+              <PanelHeader icon={Download} title="Excel Productivity Exports" action="Downloadable .xlsx workbooks" />
+              <div className="analytics-controls">
+                <label>
+                  <span>Export timezone</span>
+                  <select className="input-field" value={reportExportTimezone} onChange={(event) => setReportExportTimezone(event.target.value)}>
+                    <option value="Asia/Kolkata">Asia/Kolkata IST</option>
+                    <option value="UTC">UTC</option>
+                  </select>
+                </label>
+              </div>
+              <div className="report-grid">
+                <button
+                  className="report-card"
+                  onClick={() => downloadExcelReport('/api/reports/exports/manager-project-employee.xlsx', 'manager-project-employee-productivity.xlsx')}
+                  disabled={reportExportBusy !== ''}
+                >
+                  <FileSpreadsheet size={24} />
+                  <div>
+                    <strong>Manager / Project / Employee</strong>
+                    <small>Three productivity sheets in one workbook.</small>
+                  </div>
+                  <Download size={18} />
+                </button>
+                <button
+                  className="report-card"
+                  onClick={() => downloadExcelReport('/api/reports/exports/employee-comprehensive.xlsx', 'employee-comprehensive-productivity.xlsx')}
+                  disabled={reportExportBusy !== ''}
+                >
+                  <Users size={24} />
+                  <div>
+                    <strong>Employee Comprehensive</strong>
+                    <small>Durations, login/logout, manager, project, shift.</small>
+                  </div>
+                  <Download size={18} />
+                </button>
+                <button
+                  className="report-card"
+                  onClick={() => downloadExcelReport('/api/reports/exports/timezone-optimized.xlsx', `timezone-optimized-productivity-${reportExportTimezone.replace('/', '-')}.xlsx`)}
+                  disabled={reportExportBusy !== ''}
+                >
+                  <Clock size={24} />
+                  <div>
+                    <strong>Timezone Optimized</strong>
+                    <small>Converted timestamps plus idle-break detail sheet.</small>
+                  </div>
+                  <Download size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="panel full">
               <PanelHeader icon={FileSpreadsheet} title="Employee Productivity Summary Report" action="Project, manager, and shift" />
               <div className="analytics-controls">
                 <label>
                   <span>Group by</span>
-                  <select className="input-field" value={employeeReportGroupBy} onChange={(event) => setEmployeeReportGroupBy(event.target.value)}>
+                  <select
+                    className="input-field"
+                    value={employeeReportGroupBy}
+                    onChange={(event) => {
+                      setEmployeeReportGroupBy(event.target.value);
+                      setEmployeeReportGroupSearch('');
+                      setEmployeeProductivityReport([]);
+                    }}
+                  >
+                    <option value="employee">Employee</option>
                     <option value="project">Project</option>
                     <option value="manager">Manager</option>
                     <option value="shift">Shift</option>
                   </select>
                 </label>
+                <label>
+                  <span>Search {reportGroupLabel(employeeReportGroupBy)}</span>
+                  <input
+                    className="input-field"
+                    list="employee-productivity-group-options"
+                    value={employeeReportGroupSearch}
+                    onChange={(event) => setEmployeeReportGroupSearch(event.target.value)}
+                    placeholder={`All ${reportGroupLabel(employeeReportGroupBy).toLowerCase()}s`}
+                  />
+                  <datalist id="employee-productivity-group-options">
+                    {employeeReportGroupOptions.map((option) => (
+                      <option key={option} value={option} />
+                    ))}
+                  </datalist>
+                </label>
                 <button className="btn btn-secondary" onClick={fetchEmployeeProductivityReport}>
                   <RefreshCw size={16} />
                   Refresh
                 </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={downloadEmployeeProductivitySummaryTable}
+                  disabled={!filteredEmployeeProductivityReport.length}
+                >
+                  <Download size={16} />
+                  Download
+                </button>
               </div>
               <div className="fixed-table session-events-table">
                 <DataTable
-                  columns={['Group', 'Employee', 'Username', 'Login', 'Logout', 'Active', 'Productive', 'Idle']}
-                  rows={employeeProductivityReport.map((row) => [
+                  columns={['Group', 'Employee', 'Username', 'Login', 'Logout', 'Active', 'Productive', 'Idle', 'Score']}
+                  rows={filteredEmployeeProductivityReport.map((row) => [
                     row.group_name,
                     row.employee_name,
                     row.username,
@@ -2482,8 +2780,11 @@ export default function Dashboard() {
                     secondsToHours(row.active_seconds),
                     secondsToHours(row.productive_seconds),
                     secondsToHours(row.idle_seconds),
+                    row.productivity_score == null ? '-' : (
+                      <span className={`score ${scoreTone(Number(row.productivity_score))}`}>{row.productivity_score}</span>
+                    ),
                   ])}
-                  emptyMessage="No employee productivity report data is available yet."
+                  emptyMessage={employeeReportLoading ? 'Loading employee productivity report...' : 'No employee productivity report data is available yet.'}
                 />
               </div>
             </div>
@@ -2507,6 +2808,33 @@ export default function Dashboard() {
                 />
               </div>
             </div>
+            <div className="panel full">
+              <PanelHeader icon={AlertTriangle} title="Prohibited Application and Domain Usage" action="Manager email alerts" />
+              <div className="fixed-table detailed-session-table">
+                <DataTable
+                  columns={['Employee', 'Project', 'Manager', 'Type', 'Resource', 'First seen', 'Last seen', 'Duration', 'Attempts', 'Email alert']}
+                  rows={prohibitedUsageReport.map((row) => [
+                    row.employee_name,
+                    row.project_name || '-',
+                    row.manager_name || '-',
+                    row.resource_type,
+                    <div className="stacked-cell">
+                      <strong>{row.domain || row.app_name || '-'}</strong>
+                      <small>{row.url || row.window_title || '-'}</small>
+                    </div>,
+                    formatIstDateTime(row.first_seen_at),
+                    formatIstDateTime(row.last_seen_at),
+                    secondsToHours(row.duration),
+                    row.occurrence_count,
+                    <div className="stacked-cell">
+                      <span className={`status-pill alert-${row.email_status}`}>{row.email_status.replaceAll('_', ' ')}</span>
+                      <small>{row.manager_email || row.email_error || 'No manager email'}</small>
+                    </div>,
+                  ])}
+                  emptyMessage="No prohibited application or domain usage has been recorded yet."
+                />
+              </div>
+            </div>
           </section>
         )}
 
@@ -2516,6 +2844,11 @@ export default function Dashboard() {
               <PanelHeader icon={Settings} title="App and URL Rules" action="Project scoped" />
               <div className="rules-layout">
                 <form className="rule-form" onSubmit={createRule}>
+                  {ruleFormFeedback.message && (
+                    <div className={`inline-feedback ${ruleFormFeedback.tone}`}>
+                      {ruleFormFeedback.message}
+                    </div>
+                  )}
                   <div className="rule-form-grid">
                     <label>
                       <span>Application</span>

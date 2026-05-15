@@ -5,7 +5,7 @@ import ctypes
 
 import psutil
 
-from collectors.browser_url_collector import BrowserUrlResolver
+from collectors.browser_url_collector import BROWSER_PROCESSES, BrowserUrlResolver
 from collectors.idle_reason_prompt import IdleReasonPrompt
 from core.runtime_state import RuntimeState
 from ingest.event_queue import EventQueue
@@ -80,6 +80,16 @@ class AppUsageCollector:
         snapshot.domain = browser_url.domain
         return snapshot
 
+    def activity_key(self, snapshot: WindowSnapshot) -> tuple[str, str, str]:
+        process_name = (snapshot.process_name or "").lower()
+        if process_name in BROWSER_PROCESSES:
+            return ("browser", process_name, snapshot.url or self.normalize_title(snapshot.window_title))
+        return ("app", process_name, self.normalize_title(snapshot.window_title))
+
+    @staticmethod
+    def normalize_title(value: str | None) -> str:
+        return " ".join((value or "").strip().lower().split())
+
     def enqueue_window_event(self, event_type: str, snapshot: WindowSnapshot, started_at: datetime, ended_at: datetime) -> None:
         duration = max(0, int((ended_at - started_at).total_seconds()))
         payload = {
@@ -89,6 +99,8 @@ class AppUsageCollector:
             "window_title": snapshot.window_title,
             "pid": snapshot.pid,
             "file_path": snapshot.file_path,
+            "url": snapshot.url,
+            "domain": snapshot.domain,
             "start_time": started_at.isoformat(),
             "end_time": ended_at.isoformat(),
             "duration": duration,
@@ -170,9 +182,7 @@ class AppUsageCollector:
             self.state.current_start = now
             self.state.last_active_sample_at = now
             self.queue.enqueue("app_session_start", {**self.base_payload(), **snapshot.__dict__}, now.isoformat())
-        elif (
-            snapshot.process_name != self.state.current_window.process_name
-        ):
+        elif self.activity_key(snapshot) != self.activity_key(self.state.current_window):
             sample_start = self.state.last_active_sample_at or self.state.current_start
             self.enqueue_active_sample(self.state.current_window, sample_start, now, idle_seconds)
             self.enqueue_window_event("app_session_end", self.state.current_window, self.state.current_start, now)

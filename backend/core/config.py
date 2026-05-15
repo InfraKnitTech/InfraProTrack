@@ -30,6 +30,9 @@ class MySQLConfig:
 class EmailConfig:
     HOST: str = _cfg["email"]["host"]
     PORT: int = _cfg["email"]["port"]
+    SECURE: bool = bool(_cfg["email"].get("secure", False))
+    USER: str = _cfg["email"].get("user", "")
+    PASSWORD: str = _cfg["email"].get("pass", "")
     FROM: str = _cfg["email"]["from"]
 
 class AgentConfig:

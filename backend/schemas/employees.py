@@ -105,6 +105,8 @@ class EmployeeInsightEvent(BaseModel):
     type: str
     app_name: str | None
     window_title: str | None
+    url: str | None = None
+    domain: str | None = None
     start_time: datetime | None
     end_time: datetime | None
     duration: int

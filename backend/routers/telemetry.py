@@ -8,6 +8,7 @@ from core.time_utils import now_ist
 from models.activity_log import ActivityLog
 from models.usage import AppUsage, UrlUsage
 from models.monitoring import IdleLog, Screenshot, AppRule
+from services.prohibited_alerts import record_prohibited_usage
 
 router = APIRouter(prefix="/api/telemetry", tags=["Telemetry"])
 
@@ -46,7 +47,6 @@ async def ingest_telemetry(
     category = _classify_app(app_name or "", window_title or "", db)
     if category == "prohibited":
         effective_type = "unproductive"
-        # TODO: trigger alert email to manager here
     elif category == "unproductive":
         effective_type = "unproductive"
     else:
@@ -66,6 +66,17 @@ async def ingest_telemetry(
     )
     db.add(activity)
     db.flush()  # get activity.id before commit
+    if category == "prohibited":
+        record_prohibited_usage(
+            db,
+            user=current_user,
+            resource_type="application",
+            occurred_at=parsed_end or parsed_start or now_ist(),
+            duration=duration,
+            app_name=app_name,
+            url=url,
+            window_title=window_title,
+        )
 
     # Save idle log entry
     if effective_type == "idle":

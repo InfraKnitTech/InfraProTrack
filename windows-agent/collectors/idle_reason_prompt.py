@@ -23,11 +23,12 @@ class IdleReasonPrompt:
     def ask(self, idle_duration_seconds: int) -> IdleReason:
         try:
             import tkinter as tk
-            from tkinter import ttk
+            from tkinter import messagebox, ttk
         except Exception:
             return IdleReason()
 
         result = IdleReason()
+        submitted = False
         try:
             root = tk.Tk()
             root.title("InfraProTrack Idle Reason")
@@ -59,20 +60,39 @@ class IdleReasonPrompt:
         note.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(4, 12))
 
         def submit() -> None:
+            nonlocal submitted
             result.category = selected.get().strip() or None
             typed = note.get("1.0", "end").strip()
             result.reason = typed or result.category
+            submitted = True
             root.destroy()
+
+        def block_close() -> None:
+            messagebox.showwarning(
+                "Idle reason required",
+                "Please submit an idle reason before closing this prompt.",
+                parent=root,
+            )
+            root.lift()
+            root.focus_force()
 
         button = ttk.Button(container, text="Submit", command=submit)
         button.grid(row=6, column=1, sticky="e")
         root.bind("<Return>", lambda _event: submit())
-        root.protocol("WM_DELETE_WINDOW", submit)
+        root.bind("<Escape>", lambda _event: block_close())
+        root.protocol("WM_DELETE_WINDOW", block_close)
+        try:
+            root.grab_set()
+        except Exception:
+            pass
         root.update_idletasks()
         width = root.winfo_width()
         height = root.winfo_height()
         x = (root.winfo_screenwidth() // 2) - (width // 2)
         y = (root.winfo_screenheight() // 2) - (height // 2)
         root.geometry(f"+{x}+{y}")
+        root.focus_force()
         root.mainloop()
+        if not submitted:
+            return IdleReason()
         return result

@@ -3,6 +3,7 @@ InfraProTrack - Employee Productivity Monitoring System
 FastAPI Backend | Docs: /docs  ReDoc: /redoc
 """
 from contextlib import asynccontextmanager
+import logging
 from fastapi import Request
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,7 +14,9 @@ import uvicorn
 from core.config import server
 from database import create_all_tables, reset_connection_pool
 from seed import seed_defaults
-from routers import agents, analytics, auth, dashboard, employees, groups, projects, reports, rules, shifts, telemetry
+from routers import agents, analytics, auth, dashboard, employees, groups, productivity_index, projects, reports, rules, shifts, telemetry
+
+logger = logging.getLogger("infraprotrack.backend")
 
 
 @asynccontextmanager
@@ -61,6 +64,7 @@ app.include_router(analytics.router)
 app.include_router(reports.router)
 app.include_router(rules.router)
 app.include_router(groups.router)
+app.include_router(productivity_index.router)
 app.include_router(projects.router)
 app.include_router(shifts.router)
 app.include_router(employees.router)
@@ -68,6 +72,7 @@ app.include_router(employees.router)
 
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
+    logger.exception("Database operation failed for %s: %s", request.url.path, exc)
     reset_connection_pool()
     return JSONResponse(
         status_code=503,

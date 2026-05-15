@@ -12,6 +12,7 @@ from models.agent import AgentDevice, FileUsage, RawAgentEvent
 from models.monitoring import AppRule, IdleLog
 from models.usage import AppUsage, BrowserUrlActivity, UrlUsage
 from models.user import User
+from services.prohibited_alerts import record_prohibited_usage
 
 
 @dataclass
@@ -97,19 +98,22 @@ def _normalize_app_session(db: Session, agent_id: int, user: User, payload: dict
     app_name = _clean(payload.get("app_name")) or _clean(payload.get("process_name")) or "Unknown"
     window_title = _clean(payload.get("window_title"))
     file_path = _clean(payload.get("file_path"))
+    url = _clean(payload.get("url"))
     category = _classify_app(db, app_name, window_title)
     activity_type = "unproductive" if category in {"unproductive", "prohibited"} else "active"
 
-    db.add(ActivityLog(
-        user_id=user.id,
-        type=activity_type,
-        app_name=app_name,
-        window_title=window_title,
-        file_path=file_path,
-        start_time=_ist_naive(start_time),
-        end_time=_ist_naive(end_time),
-        duration=duration,
-    ))
+    if not payload.get("app_usage_already_sampled"):
+        db.add(ActivityLog(
+            user_id=user.id,
+            type=activity_type,
+            app_name=app_name,
+            window_title=window_title,
+            url=url,
+            file_path=file_path,
+            start_time=_ist_naive(start_time),
+            end_time=_ist_naive(end_time),
+            duration=duration,
+        ))
     if not payload.get("app_usage_already_sampled"):
         _upsert_app_usage(db, user.id, app_name, category, _ist_naive(start_time), duration)
 
@@ -124,6 +128,16 @@ def _normalize_app_session(db: Session, agent_id: int, user: User, payload: dict
             end_time=_ist_naive(end_time),
             duration=duration,
         ))
+    if category == "prohibited":
+        record_prohibited_usage(
+            db,
+            user=user,
+            resource_type="application",
+            occurred_at=_ist_naive(end_time),
+            duration=duration,
+            app_name=app_name,
+            window_title=window_title,
+        )
     return True
 
 
@@ -136,7 +150,21 @@ def _normalize_active_window_sample(db: Session, user: User, payload: dict[str, 
 
     app_name = _clean(payload.get("app_name")) or _clean(payload.get("process_name")) or "Unknown"
     window_title = _clean(payload.get("window_title"))
+    url = _clean(payload.get("url"))
+    file_path = _clean(payload.get("file_path"))
     category = _classify_app(db, app_name, window_title)
+    activity_type = "unproductive" if category in {"unproductive", "prohibited"} else "active"
+    db.add(ActivityLog(
+        user_id=user.id,
+        type=activity_type,
+        app_name=app_name,
+        window_title=window_title,
+        url=url,
+        file_path=file_path,
+        start_time=_ist_naive(start_time),
+        end_time=_ist_naive(end_time),
+        duration=duration,
+    ))
     _upsert_app_usage(db, user.id, app_name, category, _ist_naive(start_time), duration)
     return True
 
@@ -226,6 +254,18 @@ def _normalize_url_usage(db: Session, user: User, payload: dict[str, Any], fallb
         duration=duration,
     ))
     _upsert_url_usage(db, user.id, domain, url, category, _ist_naive(start_time), duration)
+    if category == "prohibited":
+        record_prohibited_usage(
+            db,
+            user=user,
+            resource_type="domain",
+            occurred_at=_ist_naive(end_time),
+            duration=duration,
+            app_name=_clean(payload.get("app_name")),
+            domain=domain,
+            url=url,
+            window_title=_clean(payload.get("window_title")),
+        )
     return True
 
 

@@ -27,7 +27,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "os_version": "",
     "agent_version": AGENT_VERSION,
     "username": "",
-    "check_interval_seconds": 5,
+    "check_interval_seconds": 1,
     "idle_threshold_seconds": 60,
     "heartbeat_interval_seconds": 30,
     "batch_interval_seconds": 15,
